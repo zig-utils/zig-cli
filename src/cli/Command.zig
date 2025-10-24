@@ -46,6 +46,7 @@ pub const ParseContext = struct {
 
 name: []const u8,
 description: []const u8,
+aliases: std.ArrayList([]const u8),
 options: std.ArrayList(Option),
 arguments: std.ArrayList(Argument),
 subcommands: std.ArrayList(*Command),
@@ -57,6 +58,7 @@ pub fn init(allocator: std.mem.Allocator, name: []const u8, description: []const
     cmd.* = .{
         .name = name,
         .description = description,
+        .aliases = std.ArrayList([]const u8).init(allocator),
         .options = std.ArrayList(Option).init(allocator),
         .arguments = std.ArrayList(Argument).init(allocator),
         .subcommands = std.ArrayList(*Command).init(allocator),
@@ -66,6 +68,7 @@ pub fn init(allocator: std.mem.Allocator, name: []const u8, description: []const
 }
 
 pub fn deinit(self: *Command) void {
+    self.aliases.deinit();
     self.options.deinit();
     self.arguments.deinit();
 
@@ -74,6 +77,11 @@ pub fn deinit(self: *Command) void {
         self.allocator.destroy(subcmd);
     }
     self.subcommands.deinit();
+}
+
+pub fn addAlias(self: *Command, alias: []const u8) !*Command {
+    try self.aliases.append(alias);
+    return self;
 }
 
 pub fn addOption(self: *Command, option: Option) !*Command {
@@ -107,8 +115,16 @@ pub fn findOption(self: *Command, arg: []const u8) ?*const Option {
 
 pub fn findSubcommand(self: *Command, name: []const u8) ?*Command {
     for (self.subcommands.items) |subcmd| {
+        // Check name
         if (std.mem.eql(u8, subcmd.name, name)) {
             return subcmd;
+        }
+
+        // Check aliases
+        for (subcmd.aliases.items) |alias| {
+            if (std.mem.eql(u8, alias, name)) {
+                return subcmd;
+            }
         }
     }
     return null;

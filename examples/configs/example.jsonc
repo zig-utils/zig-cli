@@ -1,0 +1,50 @@
+{
+  // Application configuration in JSONC format
+  // (JSON with Comments)
+
+  "name": "zig-cli-app",
+  "version": "1.0.0",
+  "description": "A CLI application built with zig-cli",
+  "debug": true,
+
+  /* Server settings
+     Can use multi-line comments */
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "workers": 4,
+    "timeout": 30.5
+  },
+
+  // Database settings
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "name": "mydb",
+    "user": "admin",
+    "pool_size": 10
+  },
+
+  // Features
+  "features": {
+    "logging": true,
+    "caching": true,
+    "monitoring": false
+  },
+
+  // Trailing commas are allowed in JSONC
+  "allowed_origins": [
+    "http://localhost:3000",
+    "https://example.com",
+  ],
+
+  // Nested configuration
+  "api": {
+    "version": "v1",
+    "rate_limit": 100,
+    "auth": {
+      "type": "jwt",
+      "expiry": 3600,
+    },
+  },
+}

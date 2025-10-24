@@ -1,0 +1,60 @@
+{
+  // JSON5 format - more flexible than JSON
+
+  // Unquoted keys are allowed
+  name: 'zig-cli-app',  // single quotes allowed
+  version: '1.0.0',
+  description: "A CLI application built with zig-cli",  // double quotes also work
+  debug: true,
+
+  // Hexadecimal numbers
+  permissions: 0x755,
+
+  // Leading and trailing decimal points
+  ratio: .5,
+  threshold: 50.,
+
+  /* Multi-line
+     comments work */
+  server: {
+    host: '0.0.0.0',
+    port: 8080,
+    workers: 4,
+    timeout: 30.5,
+    // Infinity and NaN are valid
+    maxConnections: Infinity,
+  },
+
+  database: {
+    host: 'localhost',
+    port: 5432,
+    name: 'mydb',
+    user: 'admin',
+    poolSize: 10,  // camelCase keys work
+  },
+
+  features: {
+    logging: true,
+    caching: true,
+    monitoring: false,
+  },
+
+  // Trailing commas everywhere
+  allowedOrigins: [
+    'http://localhost:3000',
+    'https://example.com',
+  ],
+
+  api: {
+    version: 'v1',
+    rateLimit: 100,
+    auth: {
+      type: 'jwt',
+      expiry: 3600,
+    },
+  },
+
+  // Multi-line strings (with explicit newlines)
+  welcomeMessage: 'Welcome to the app!\n' +
+    'This is a multi-line message',
+}

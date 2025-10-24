@@ -66,16 +66,21 @@ stdin: std.fs.File,
 stdout: std.fs.File,
 supports_unicode: bool,
 supports_color: bool,
+width: usize,
+height: usize,
 
 pub fn init() Terminal {
     const supports_unicode = detectUnicodeSupport();
     const supports_color = detectColorSupport();
+    const size = detectTerminalSize();
 
     return .{
         .stdin = std.io.getStdIn(),
         .stdout = std.io.getStdOut(),
         .supports_unicode = supports_unicode,
         .supports_color = supports_color,
+        .width = size.width,
+        .height = size.height,
     };
 }
 
@@ -95,6 +100,33 @@ fn detectColorSupport() bool {
         return !std.mem.eql(u8, term, "dumb");
     }
     return true;
+}
+
+const TerminalSize = struct {
+    width: usize,
+    height: usize,
+};
+
+fn detectTerminalSize() TerminalSize {
+    if (builtin.os.tag == .windows) {
+        // Windows console API would go here
+        return .{ .width = 80, .height = 24 };
+    }
+
+    // Try to get terminal size via ioctl
+    const stdout = std.io.getStdOut();
+    var winsize: std.os.linux.winsize = undefined;
+
+    const result = std.os.linux.ioctl(stdout.handle, std.os.linux.T.IOCGWINSZ, @intFromPtr(&winsize));
+    if (result == 0 and winsize.ws_col > 0 and winsize.ws_row > 0) {
+        return .{
+            .width = winsize.ws_col,
+            .height = winsize.ws_row,
+        };
+    }
+
+    // Fallback to common defaults
+    return .{ .width = 80, .height = 24 };
 }
 
 pub fn readKey(self: *Terminal) !?KeyPress {

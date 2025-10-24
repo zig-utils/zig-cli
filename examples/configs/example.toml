@@ -1,0 +1,40 @@
+# Example TOML configuration file
+
+# Application settings
+name = "zig-cli-app"
+version = "1.0.0"
+description = "A CLI application built with zig-cli"
+debug = true
+
+# Server configuration
+[server]
+host = "0.0.0.0"
+port = 8080
+workers = 4
+timeout = 30.5
+
+# Database configuration
+[database]
+host = "localhost"
+port = 5432
+name = "mydb"
+user = "admin"
+pool_size = 10
+
+# Features to enable
+[features]
+logging = true
+caching = true
+monitoring = false
+
+# Array example
+allowed_origins = ["http://localhost:3000", "https://example.com"]
+
+# Nested configuration
+[api]
+version = "v1"
+rate_limit = 100
+
+[api.auth]
+type = "jwt"
+expiry = 3600
