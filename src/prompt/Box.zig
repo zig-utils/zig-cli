@@ -63,7 +63,7 @@ pub const Box = struct {
 
     pub fn init(allocator: std.mem.Allocator) Box {
         const terminal = Terminal.init();
-        const style = if (terminal.supports_unicode) .rounded else .ascii;
+        const style: BoxStyle = if (terminal.supports_unicode) .rounded else .ascii;
 
         return .{
             .allocator = allocator,
@@ -163,15 +163,15 @@ pub const Box = struct {
     }
 
     fn splitLines(self: *Box, content: []const u8) ![][]const u8 {
-        var list = std.ArrayList([]const u8).init(self.allocator);
-        errdefer list.deinit();
+        var list = std.ArrayList([]const u8){};
+        errdefer list.deinit(self.allocator);
 
         var iter = std.mem.splitScalar(u8, content, '\n');
         while (iter.next()) |line| {
-            try list.append(line);
+            try list.append(self.allocator, line);
         }
 
-        return list.toOwnedSlice();
+        return list.toOwnedSlice(self.allocator);
     }
 };
 

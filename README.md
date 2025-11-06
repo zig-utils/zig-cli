@@ -1,18 +1,36 @@
 # zig-cli
 
-A modern, feature-rich CLI library for Zig, inspired by popular frameworks like clapp. Build beautiful command-line applications and interactive prompts with ease.
+A **type-safe, compile-time validated** CLI library for Zig. Define your CLI with structs, get full type safety and zero runtime overhead.
+
+**No string-based lookups. No runtime parsing. Just pure, type-safe Zig.**
+
+```zig
+// Define options as a struct
+const MyOptions = struct {
+    name: []const u8,
+    port: u16 = 8080,
+};
+
+// Type-safe action
+fn run(ctx: *cli.Context(MyOptions)) !void {
+    const name = ctx.get(.name);  // Compile-time validated!
+    const port = ctx.get(.port);
+}
+```
+
+Inspired by modern CLI frameworks, built for Zig's strengths.
 
 ## Features
 
-### CLI Framework
-- **Fluent API**: Chainable builder pattern for intuitive CLI construction
+### CLI Framework (Type-Safe)
+- **Compile-Time Validation**: All field access validated at compile time
+- **Struct-Based Options**: Define CLI options as structs - auto-generate everything
+- **Zero Runtime Overhead**: All type checking happens at compile time
+- **IDE Autocomplete**: Full IntelliSense/LSP support for field names
 - **Command Routing**: Support for nested subcommands with aliases
-- **Argument Parsing**: Robust parsing with validation pipeline
-- **Type Safety**: Strong typing for options (string, int, float, bool)
-- **Auto-generated Help**: Beautiful help text generation
-- **Validation**: Built-in validation with custom validators
-- **Command Aliases**: Support for command shortcuts and alternative names
-- **Middleware System**: Pre/post command hooks with built-in middleware
+- **Auto-Generated Help**: Beautiful help text from struct definitions
+- **Type Safety**: Enums, optionals, nested structs all supported
+- **Middleware System**: Type-safe pre/post command hooks
 
 ### Interactive Prompts
 - **State Machine**: Clean 5-state state machine (initial → active ↔ error → submit/cancel)
@@ -71,10 +89,21 @@ exe.root_module.addImport("zig-cli", zig_cli.module("zig-cli"));
 const std = @import("std");
 const cli = @import("zig-cli");
 
-fn greetAction(ctx: *cli.Command.ParseContext) !void {
-    const name = ctx.getOption("name") orelse "World";
+// 1. Define options as a struct - that's it!
+const GreetOptions = struct {
+    name: []const u8 = "World",  // With default value
+    enthusiastic: bool = false,   // Boolean flag
+};
+
+// 2. Type-safe action function
+fn greet(ctx: *cli.Context(GreetOptions)) !void {
     const stdout = std.io.getStdOut().writer();
-    try stdout.print("Hello, {s}!\n", .{name});
+
+    // Compile-time validated field access - no strings!
+    const name = ctx.get(.name);
+    const punct: []const u8 = if (ctx.get(.enthusiastic)) "!" else ".";
+
+    try stdout.print("Hello, {s}{s}\n", .{name, punct});
 }
 
 pub fn main() !void {
@@ -82,30 +111,27 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Create CLI application
-    var app = try cli.CLI.init(
-        allocator,
-        "myapp",
-        "1.0.0",
-        "My awesome CLI application"
-    );
-    defer app.deinit();
+    // 3. Create command - options auto-generated!
+    var cmd = try cli.command(GreetOptions).init(allocator, "greet", "Greet someone");
+    defer cmd.deinit();
 
-    // Add options
-    const name_option = cli.Option.init("name", "name", "Your name", .string)
-        .withShort('n')
-        .withDefault("World");
-    _ = try app.option(name_option);
+    _ = cmd.setAction(greet);
 
-    // Set action
-    _ = app.action(greetAction);
-
-    // Parse arguments
+    // 4. Parse and execute
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
-    try app.parse(args);
+    try cli.Parser.init(allocator).parse(cmd.getCommand(), args[1..]);
 }
 ```
+
+That's it! Run with: `myapp greet --name Alice --enthusiastic`
+
+**Benefits:**
+- ✅ Options auto-generated from struct fields
+- ✅ Compile-time validation - typos caught by compiler
+- ✅ Full IDE autocomplete support
+- ✅ No string-based lookups
+- ✅ Zero runtime overhead
 
 ### Interactive Prompts
 
@@ -259,6 +285,156 @@ fn myAction(ctx: *cli.Command.ParseContext) !void {
     const count = ctx.getArgumentCount();
 }
 ```
+
+### Type-Safe API (Compile-Time Validated)
+
+zig-cli provides a fully typed API layer that leverages Zig's comptime features for maximum type safety and zero runtime overhead.
+
+#### Type-Safe Commands
+
+Define your command options as a struct and get compile-time validation:
+
+```zig
+const GreetOptions = struct {
+    name: []const u8,              // Required string
+    age: ?u16 = null,              // Optional integer
+    times: u8 = 1,                 // With default value
+    verbose: bool = false,         // Boolean flag
+    format: enum { text, json } = .text, // Enum support
+};
+
+fn greetAction(ctx: *cli.TypedContext(GreetOptions)) !void {
+    // Compile-time validated field access - no string lookups!
+    const name = ctx.get(.name);      // Returns []const u8
+    const age = ctx.get(.age);        // Returns ?u16
+    const times = ctx.get(.times);    // Returns u8
+
+    // Or parse entire struct at once
+    const opts = try ctx.parse();
+
+    std.debug.print("Hello, {s}!\n", .{opts.name});
+}
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    // Auto-generates CLI options from struct fields!
+    var cmd = try cli.TypedCommand(GreetOptions).init(
+        allocator,
+        "greet",
+        "Greet a user",
+    );
+    defer cmd.deinit();
+
+    _ = cmd.setAction(greetAction);
+
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    // Get underlying command for parsing
+    try cli.Parser.init(allocator).parse(cmd.getCommand(), args[1..]);
+}
+```
+
+Benefits:
+- ✅ **Compile-time validation** - field names validated at compile time
+- ✅ **IDE autocomplete** - full IntelliSense support
+- ✅ **Type safety** - no runtime string parsing or optionals
+- ✅ **Auto-generation** - options automatically created from struct
+- ✅ **Zero overhead** - comptime code generates efficient runtime
+
+#### Type-Safe Config
+
+Load config files with compile-time schema validation:
+
+```zig
+const AppConfig = struct {
+    database: struct {
+        host: []const u8,
+        port: u16,
+        max_connections: u32 = 100,
+    },
+    log_level: enum { debug, info, warn, @"error" } = .info,
+    debug: bool = false,
+};
+
+// Load with full type checking
+var config = try cli.config.loadTyped(AppConfig, allocator, "config.toml");
+defer config.deinit();
+
+// Direct field access - no optionals, no string parsing!
+std.debug.print("DB: {s}:{d}\n", .{
+    config.value.database.host,
+    config.value.database.port,
+});
+std.debug.print("Log Level: {s}\n", .{@tagName(config.value.log_level)});
+
+// Auto-discovery also works
+var discovered = try cli.config.discoverTyped(AppConfig, allocator, "myapp");
+defer discovered.deinit();
+```
+
+Supported types:
+- Primitives: `bool`, `i8`-`i64`, `u8`-`u64`, `f32`, `f64`
+- Strings: `[]const u8`
+- Enums: Any Zig enum
+- Optionals: `?T` for optional fields
+- Nested structs: Arbitrary depth
+- Arrays: Fixed-size arrays
+
+#### Type-Safe Middleware
+
+Create middleware with typed context instead of string HashMap:
+
+```zig
+const AuthData = struct {
+    user_id: []const u8 = "",
+    username: []const u8 = "",
+    role: enum { admin, user, guest } = .guest,
+    authenticated: bool = false,
+};
+
+fn authMiddleware(ctx: *cli.TypedMiddleware(AuthData)) !bool {
+    // Type-safe field access with compile-time validation
+    ctx.set(.user_id, "12345");
+    ctx.set(.username, "john_doe");
+    ctx.set(.role, .admin);           // Enum - compile-time checked!
+    ctx.set(.authenticated, true);
+
+    // Access with type safety
+    if (ctx.get(.role) == .admin) {
+        std.debug.print("Admin access granted\n", .{});
+    }
+
+    return true;
+}
+
+// Use in middleware chain
+var chain = cli.TypedMiddlewareChain(AuthData).init(allocator);
+defer chain.deinit();
+
+try chain.useTyped(authMiddleware, "auth");
+```
+
+#### Runtime vs Typed API Comparison
+
+```zig
+// Runtime API (string-based)
+const value = ctx.getOption("name");  // Returns ?[]const u8
+if (value) |v| {
+    const age_str = ctx.getOption("age") orelse "0";
+    const age = try std.fmt.parseInt(u16, age_str, 10);
+}
+
+// Typed API (compile-time validated)
+const name = ctx.get(.name);  // Returns []const u8 directly
+const age = ctx.get(.age);    // Returns u16, already parsed
+//              ^^^^^ Compile-time validated enum field!
+```
+
+See `examples/typed.zig` for a complete working example.
 
 ### Prompts
 
@@ -521,24 +697,39 @@ try prompt.Terminal.init().write(styled);
 
 ### Configuration Files
 
-zig-cli supports loading configuration from TOML, JSONC (JSON with Comments), and JSON5 files.
+zig-cli supports type-safe configuration loading from TOML, JSONC (JSON with Comments), and JSON5 files.
 
 #### Loading Config
 
 ```zig
-// Load from file (auto-detects format)
-var config = try cli.config.load(allocator, "config.toml");
+// 1. Define your config schema as a struct
+const AppConfig = struct {
+    database: struct {
+        host: []const u8,
+        port: u16,
+    },
+    log_level: enum { debug, info, warn, @"error" } = .info,
+    debug: bool = false,
+};
+
+// 2. Load with full type checking
+var config = try cli.config.load(AppConfig, allocator, "config.toml");
 defer config.deinit();
 
-// Or load from string
-var config2 = cli.config.Config.init(allocator);
+// 3. Direct field access - type-safe!
+std.debug.print("DB: {s}:{d}\n", .{
+    config.value.database.host,
+    config.value.database.port,
+});
+
+// Load from string
+var config2 = try cli.config.loadFromString(AppConfig, allocator, toml_content, .toml);
 defer config2.deinit();
-try config2.loadFromString(content, .toml);  // or .jsonc, .json5
 
 // Auto-discover config file
-var config3 = try cli.config.discover(allocator, "myapp");
+var config3 = try cli.config.discover(AppConfig, allocator, "myapp");
 defer config3.deinit();
-// Searches for: myapp.toml, myapp.json5, myapp.jsonc, myapp.json
+// Searches for: myapp.toml, myapp.json5, myapp.jsonc
 // In: ., ./.config, ~/.config/myapp
 ```
 
@@ -639,6 +830,7 @@ Check out the `examples/` directory for complete examples:
 - `advanced.zig` - Complex CLI with multiple commands and arguments
 - `showcase.zig` - Comprehensive feature demonstration including all new prompts
 - `config.zig` - Configuration file examples (TOML, JSONC, JSON5)
+- **`typed.zig`** - Type-safe API examples (compile-time validated) (NEW!)
 
 Example config files are in `examples/configs/`:
 - `example.toml` - TOML format example
@@ -740,6 +932,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [x] Number prompt with range validation
 - [x] Path prompt with autocomplete
 - [x] Middleware system for commands
+- [x] **Type-safe API** with compile-time validation (NEW!)
+  - [x] TypedCommand with auto-generated options from structs
+  - [x] TypedConfig with schema validation
+  - [x] TypedMiddleware with compile-time field checking
 
 ### Future Enhancements
 - [ ] Tree rendering for hierarchical data

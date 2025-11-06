@@ -16,14 +16,14 @@ pub const ParseContext = struct {
         return .{
             .allocator = allocator,
             .options = std.StringHashMap([]const u8).init(allocator),
-            .arguments = std.ArrayList([]const u8).init(allocator),
+            .arguments = std.ArrayList([]const u8){},
             .command_name = command_name,
         };
     }
 
     pub fn deinit(self: *ParseContext) void {
         self.options.deinit();
-        self.arguments.deinit();
+        self.arguments.deinit(self.allocator);
     }
 
     pub fn getOption(self: *ParseContext, name: []const u8) ?[]const u8 {
@@ -58,44 +58,44 @@ pub fn init(allocator: std.mem.Allocator, name: []const u8, description: []const
     cmd.* = .{
         .name = name,
         .description = description,
-        .aliases = std.ArrayList([]const u8).init(allocator),
-        .options = std.ArrayList(Option).init(allocator),
-        .arguments = std.ArrayList(Argument).init(allocator),
-        .subcommands = std.ArrayList(*Command).init(allocator),
+        .aliases = std.ArrayList([]const u8){},
+        .options = std.ArrayList(Option){},
+        .arguments = std.ArrayList(Argument){},
+        .subcommands = std.ArrayList(*Command){},
         .allocator = allocator,
     };
     return cmd;
 }
 
 pub fn deinit(self: *Command) void {
-    self.aliases.deinit();
-    self.options.deinit();
-    self.arguments.deinit();
+    self.aliases.deinit(self.allocator);
+    self.options.deinit(self.allocator);
+    self.arguments.deinit(self.allocator);
 
     for (self.subcommands.items) |subcmd| {
         subcmd.deinit();
         self.allocator.destroy(subcmd);
     }
-    self.subcommands.deinit();
+    self.subcommands.deinit(self.allocator);
 }
 
 pub fn addAlias(self: *Command, alias: []const u8) !*Command {
-    try self.aliases.append(alias);
+    try self.aliases.append(self.allocator, alias);
     return self;
 }
 
 pub fn addOption(self: *Command, option: Option) !*Command {
-    try self.options.append(option);
+    try self.options.append(self.allocator, option);
     return self;
 }
 
 pub fn addArgument(self: *Command, argument: Argument) !*Command {
-    try self.arguments.append(argument);
+    try self.arguments.append(self.allocator, argument);
     return self;
 }
 
 pub fn addCommand(self: *Command, subcommand: *Command) !*Command {
-    try self.subcommands.append(subcommand);
+    try self.subcommands.append(self.allocator, subcommand);
     return self;
 }
 

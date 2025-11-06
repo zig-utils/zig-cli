@@ -152,24 +152,24 @@ fn parseObject(self: *JsoncParser) !Value {
 
 fn parseArray(self: *JsoncParser) !Value {
     self.pos += 1; // Skip '['
-    var items = std.ArrayList(Value).init(self.allocator);
+    var items = std.ArrayList(Value){};
     errdefer {
         for (items.items) |*item| {
             item.deinit(self.allocator);
         }
-        items.deinit();
+        items.deinit(self.allocator);
     }
 
     self.skipWhitespaceAndComments();
 
     if (self.pos < self.source.len and self.source[self.pos] == ']') {
         self.pos += 1;
-        return Value{ .array = try items.toOwnedSlice() };
+        return Value{ .array = try items.toOwnedSlice(self.allocator) };
     }
 
     while (self.pos < self.source.len) {
         const value = try self.parseValue();
-        try items.append(value);
+        try items.append(self.allocator, value);
 
         self.skipWhitespaceAndComments();
 
@@ -196,21 +196,21 @@ fn parseArray(self: *JsoncParser) !Value {
         return ParseError.InvalidSyntax;
     }
 
-    return Value{ .array = try items.toOwnedSlice() };
+    return Value{ .array = try items.toOwnedSlice(self.allocator) };
 }
 
 fn parseString(self: *JsoncParser) !Value {
     self.pos += 1; // Skip opening '"'
 
-    var str = std.ArrayList(u8).init(self.allocator);
-    errdefer str.deinit();
+    var str = std.ArrayList(u8){};
+    errdefer str.deinit(self.allocator);
 
     while (self.pos < self.source.len) {
         const c = self.source[self.pos];
 
         if (c == '"') {
             self.pos += 1;
-            return Value{ .string = try str.toOwnedSlice() };
+            return Value{ .string = try str.toOwnedSlice(self.allocator) };
         }
 
         if (c == '\\') {
@@ -232,10 +232,10 @@ fn parseString(self: *JsoncParser) !Value {
                 else => return ParseError.InvalidEscape,
             };
 
-            try str.append(unescaped);
+            try str.append(self.allocator, unescaped);
             self.pos += 1;
         } else {
-            try str.append(c);
+            try str.append(self.allocator, c);
             self.pos += 1;
         }
     }

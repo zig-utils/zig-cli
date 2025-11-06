@@ -185,12 +185,12 @@ fn parseString(self: *TomlParser) !Value {
 
 fn parseArray(self: *TomlParser) !Value {
     self.pos += 1; // Skip '['
-    var items = std.ArrayList(Value).init(self.allocator);
+    var items = std.ArrayList(Value){};
     errdefer {
         for (items.items) |*item| {
             item.deinit(self.allocator);
         }
-        items.deinit();
+        items.deinit(self.allocator);
     }
 
     while (self.pos < self.source.len) {
@@ -202,7 +202,7 @@ fn parseArray(self: *TomlParser) !Value {
         }
 
         const value = try self.parseValue();
-        try items.append(value);
+        try items.append(self.allocator, value);
 
         self.skipWhitespace();
         if (self.pos < self.source.len and self.source[self.pos] == ',') {
@@ -210,7 +210,7 @@ fn parseArray(self: *TomlParser) !Value {
         }
     }
 
-    return Value{ .array = try items.toOwnedSlice() };
+    return Value{ .array = try items.toOwnedSlice(self.allocator) };
 }
 
 fn skipWhitespace(self: *TomlParser) void {

@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 const Terminal = @This();
 
 pub const RawMode = struct {
-    original_termios: if (builtin.os.tag != .windows) std.os.termios else void,
+    original_termios: if (builtin.os.tag != .windows) std.posix.termios else void,
 
     pub fn enable() !RawMode {
         const stdin = std.io.getStdIn();
@@ -12,7 +12,7 @@ pub const RawMode = struct {
             // Windows terminal setup would go here
             return RawMode{ .original_termios = {} };
         } else {
-            const original = try std.os.tcgetattr(stdin.handle);
+            const original = try std.posix.tcgetattr(stdin.handle);
             var raw = original;
 
             // Disable canonical mode and echo
@@ -21,10 +21,10 @@ pub const RawMode = struct {
             raw.lflag.ISIG = false;
 
             // Set read to return immediately
-            raw.cc[@intFromEnum(std.os.linux.V.MIN)] = 0;
-            raw.cc[@intFromEnum(std.os.linux.V.TIME)] = 1;
+            raw.cc[@intFromEnum(std.posix.V.MIN)] = 0;
+            raw.cc[@intFromEnum(std.posix.V.TIME)] = 1;
 
-            try std.os.tcsetattr(stdin.handle, .FLUSH, raw);
+            try std.posix.tcsetattr(stdin.handle, .FLUSH, raw);
 
             return RawMode{ .original_termios = original };
         }
@@ -35,7 +35,7 @@ pub const RawMode = struct {
             return;
         }
         const stdin = std.io.getStdIn();
-        std.os.tcsetattr(stdin.handle, .FLUSH, self.original_termios) catch {};
+        std.posix.tcsetattr(stdin.handle, .FLUSH, self.original_termios) catch {};
     }
 };
 
@@ -85,7 +85,7 @@ pub fn init() Terminal {
 }
 
 fn detectUnicodeSupport() bool {
-    if (std.os.getenv("LANG")) |lang| {
+    if (std.posix.getenv("LANG")) |lang| {
         return std.mem.indexOf(u8, lang, "UTF-8") != null or
             std.mem.indexOf(u8, lang, "utf8") != null;
     }
@@ -93,10 +93,10 @@ fn detectUnicodeSupport() bool {
 }
 
 fn detectColorSupport() bool {
-    if (std.os.getenv("NO_COLOR")) |_| {
+    if (std.posix.getenv("NO_COLOR")) |_| {
         return false;
     }
-    if (std.os.getenv("TERM")) |term| {
+    if (std.posix.getenv("TERM")) |term| {
         return !std.mem.eql(u8, term, "dumb");
     }
     return true;
@@ -115,9 +115,9 @@ fn detectTerminalSize() TerminalSize {
 
     // Try to get terminal size via ioctl
     const stdout = std.io.getStdOut();
-    var winsize: std.os.linux.winsize = undefined;
+    var winsize: std.posix.system.winsize = undefined;
 
-    const result = std.os.linux.ioctl(stdout.handle, std.os.linux.T.IOCGWINSZ, @intFromPtr(&winsize));
+    const result = std.posix.system.ioctl(stdout.handle, std.posix.T.IOCGWINSZ, @intFromPtr(&winsize));
     if (result == 0 and winsize.ws_col > 0 and winsize.ws_row > 0) {
         return .{
             .width = winsize.ws_col,

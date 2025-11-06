@@ -18,7 +18,7 @@ selected_index: usize,
 checked: std.ArrayList(bool),
 
 pub fn init(allocator: std.mem.Allocator, message: []const u8, choices: []const Choice) !MultiSelectPrompt {
-    var checked = std.ArrayList(bool).init(allocator);
+    var checked = std.ArrayList(bool){};
     try checked.appendNTimes(false, choices.len);
 
     return .{
@@ -64,15 +64,15 @@ pub fn prompt(self: *MultiSelectPrompt) ![][]const u8 {
     }
 
     // Collect checked values
-    var result = std.ArrayList([]const u8).init(self.core.allocator);
+    var result = std.ArrayList([]const u8){};
     for (self.choices, 0..) |choice, i| {
         if (self.checked.items[i]) {
             const value_copy = try self.core.allocator.dupe(u8, choice.value);
-            try result.append(value_copy);
+            try result.append(self.core.allocator, value_copy);
         }
     }
 
-    return try result.toOwnedSlice();
+    return try result.toOwnedSlice(self.core.allocator);
 }
 
 fn handleKey(self: *MultiSelectPrompt, key: Terminal.KeyPress) !void {

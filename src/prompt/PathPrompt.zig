@@ -25,7 +25,7 @@ pub fn init(allocator: std.mem.Allocator, message: []const u8, path_type: PathTy
         .message = message,
         .path_type = path_type,
         .must_exist = false,
-        .suggestions = std.ArrayList([]const u8).init(allocator),
+        .suggestions = std.ArrayList([]const u8){},
         .selected_suggestion = 0,
         .show_suggestions = false,
     };
@@ -221,7 +221,7 @@ fn updateSuggestions(self: *PathPrompt) !void {
 
         // Build full path
         const full_path = try std.fs.path.join(self.core.allocator, &[_][]const u8{ dir_path, entry.name });
-        try self.suggestions.append(full_path);
+        try self.suggestions.append(self.allocator, full_path);
         count += 1;
     }
 }

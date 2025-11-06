@@ -71,7 +71,7 @@ pub fn parse(self: *Parser, command: *Command, args: []const []const u8) !void {
             }
         } else {
             // It's a positional argument
-            try context.arguments.append(arg);
+            try context.arguments.append(context.allocator, arg);
         }
     }
 

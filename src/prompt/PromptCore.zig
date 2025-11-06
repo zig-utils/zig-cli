@@ -20,7 +20,7 @@ pub fn init(allocator: std.mem.Allocator) PromptCore {
         .terminal = Terminal.init(),
         .state = .initial,
         .raw_mode = null,
-        .value = std.ArrayList(u8).init(allocator),
+        .value = std.ArrayList(u8){},
         .cursor = 0,
         .error_message = null,
     };
