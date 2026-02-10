@@ -49,7 +49,7 @@ pub fn prompt(self: *PasswordPrompt) ![]const u8 {
             continue;
         }
 
-        std.time.sleep(10 * std.time.ns_per_ms);
+        _ = std.c.nanosleep(&.{ .sec = 0, .nsec = 10 * std.time.ns_per_ms }, null);
     }
 
     try self.core.finish();

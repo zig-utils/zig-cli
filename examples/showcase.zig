@@ -12,8 +12,8 @@ pub fn main() !void {
 
     // Show terminal dimensions
     const terminal = prompt.Terminal.init();
-    var buf: [100]u8 = undefined;
-    const dims = try std.fmt.bufPrint(&buf, "Terminal: {d}x{d}", .{ terminal.width, terminal.height });
+    var dim_buf: [100]u8 = undefined;
+    const dims = try std.fmt.bufPrint(&dim_buf, "Terminal: {d}x{d}", .{ terminal.width, terminal.height });
     try prompt.note(allocator, "Detected terminal size:", dims);
 
     // Demonstrate box rendering
@@ -79,7 +79,7 @@ pub fn main() !void {
 
     // MultiSelect prompt
     try prompt.note(allocator, "Multi-Selection Demo", "space to toggle, enter to confirm");
-    const feature_choices = [_]prompt.SelectPrompt.Choice{
+    const feature_choices = [_]prompt.MultiSelectPrompt.Choice{
         .{ .label = "CLI Framework", .value = "cli", .description = "Command-line parsing" },
         .{ .label = "Interactive Prompts", .value = "prompts", .description = "User input" },
         .{ .label = "ANSI Colors", .value = "colors", .description = "Terminal styling" },
@@ -118,7 +118,7 @@ pub fn main() !void {
     try spinner.start();
 
     // Simulate some work
-    std.time.sleep(2 * std.time.ns_per_s);
+    _ = std.c.nanosleep(&.{ .sec = 2, .nsec = 0 }, null);
 
     try spinner.stop("Processing complete!");
 
@@ -130,14 +130,14 @@ pub fn main() !void {
     try prompt.box(allocator, "Summary",
         \\All features demonstrated successfully!
         \\
-        \\✓ Text input with validation
-        \\✓ Confirmation prompts
-        \\✓ Select & MultiSelect
-        \\✓ Password input
-        \\✓ Spinner/loading
-        \\✓ Box rendering
-        \\✓ Logging & messages
-        \\✓ Terminal detection
+        \\- Text input with validation
+        \\- Confirmation prompts
+        \\- Select & MultiSelect
+        \\- Password input
+        \\- Spinner/loading
+        \\- Box rendering
+        \\- Logging & messages
+        \\- Terminal detection
     );
 
     // Display outro

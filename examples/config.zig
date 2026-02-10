@@ -1,32 +1,43 @@
 const std = @import("std");
 const cli = @import("zig-cli");
 
+fn getIo() std.Io {
+    return std.Options.debug_io;
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(getIo(), &buf);
+    const stdout = &file_writer.interface;
 
     try stdout.print("\n=== Config File Examples ===\n\n", .{});
 
     // Example 1: Load TOML config
     try stdout.print("1. Loading TOML config...\n", .{});
+    try stdout.flush();
     try demonstrateToml(allocator);
 
     // Example 2: Load JSONC config
     try stdout.print("\n2. Loading JSONC config...\n", .{});
+    try stdout.flush();
     try demonstrateJsonc(allocator);
 
     // Example 3: Load JSON5 config
     try stdout.print("\n3. Loading JSON5 config...\n", .{});
+    try stdout.flush();
     try demonstrateJson5(allocator);
 
     // Example 4: Auto-discovery
     try stdout.print("\n4. Config auto-discovery...\n", .{});
+    try stdout.flush();
     try demonstrateDiscovery(allocator);
 
     try stdout.print("\n=== All examples completed! ===\n", .{});
+    try stdout.flush();
 }
 
 fn demonstrateToml(allocator: std.mem.Allocator) !void {
@@ -52,7 +63,9 @@ fn demonstrateToml(allocator: std.mem.Allocator) !void {
 
     try config.loadFromString(toml_content, .toml);
 
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(getIo(), &buf);
+    const stdout = &file_writer.interface;
 
     // Read values
     if (config.getString("name")) |name| {
@@ -78,6 +91,7 @@ fn demonstrateToml(allocator: std.mem.Allocator) !void {
             }
         }
     }
+    try stdout.flush();
 }
 
 fn demonstrateJsonc(allocator: std.mem.Allocator) !void {
@@ -91,7 +105,7 @@ fn demonstrateJsonc(allocator: std.mem.Allocator) !void {
         \\  "features": [
         \\    "logging",
         \\    "caching",
-        \\    "monitoring",  // trailing comma allowed
+        \\    "monitoring",
         \\  ],
         \\  "settings": {
         \\    "timeout": 30,
@@ -105,7 +119,9 @@ fn demonstrateJsonc(allocator: std.mem.Allocator) !void {
 
     try config.loadFromString(jsonc_content, .jsonc);
 
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(getIo(), &buf);
+    const stdout = &file_writer.interface;
 
     if (config.getString("name")) |name| {
         try stdout.print("  App name: {s}\n", .{name});
@@ -122,13 +138,14 @@ fn demonstrateJsonc(allocator: std.mem.Allocator) !void {
             try stdout.print("\n", .{});
         }
     }
+    try stdout.flush();
 }
 
 fn demonstrateJson5(allocator: std.mem.Allocator) !void {
     const json5_content =
         \\{
         \\  // JSON5 allows unquoted keys
-        \\  name: 'my-app',  // single quotes allowed
+        \\  name: 'my-app',
         \\  version: '2.0.0',
         \\  // Hexadecimal numbers
         \\  permissions: 0x755,
@@ -150,7 +167,9 @@ fn demonstrateJson5(allocator: std.mem.Allocator) !void {
 
     try config.loadFromString(json5_content, .json5);
 
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(getIo(), &buf);
+    const stdout = &file_writer.interface;
 
     if (config.getString("name")) |name| {
         try stdout.print("  App name: {s}\n", .{name});
@@ -175,14 +194,18 @@ fn demonstrateJson5(allocator: std.mem.Allocator) !void {
             try stdout.print("\n", .{});
         }
     }
+    try stdout.flush();
 }
 
 fn demonstrateDiscovery(allocator: std.mem.Allocator) !void {
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(getIo(), &buf);
+    const stdout = &file_writer.interface;
 
     // Try to discover config for "myapp"
-    var config = cli.config.discover(allocator, "myapp") catch |err| {
+    var config = cli.config.Config.discover(allocator, "myapp") catch |err| {
         try stdout.print("  No config file found (this is expected): {}\n", .{err});
+        try stdout.flush();
         return;
     };
     defer config.deinit();
@@ -201,4 +224,5 @@ fn demonstrateDiscovery(allocator: std.mem.Allocator) !void {
             else => try stdout.print("(complex value)\n", .{}),
         }
     }
+    try stdout.flush();
 }

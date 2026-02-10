@@ -19,7 +19,7 @@ checked: std.ArrayList(bool),
 
 pub fn init(allocator: std.mem.Allocator, message: []const u8, choices: []const Choice) !MultiSelectPrompt {
     var checked = std.ArrayList(bool){};
-    try checked.appendNTimes(false, choices.len);
+    try checked.appendNTimes(allocator, false, choices.len);
 
     return .{
         .core = PromptCore.init(allocator),
@@ -31,7 +31,7 @@ pub fn init(allocator: std.mem.Allocator, message: []const u8, choices: []const 
 }
 
 pub fn deinit(self: *MultiSelectPrompt) void {
-    self.checked.deinit();
+    self.checked.deinit(self.core.allocator);
     self.core.deinit();
 }
 
@@ -53,7 +53,7 @@ pub fn prompt(self: *MultiSelectPrompt) ![][]const u8 {
             continue;
         }
 
-        std.time.sleep(10 * std.time.ns_per_ms);
+        _ = std.c.nanosleep(&.{ .sec = 0, .nsec = 10 * std.time.ns_per_ms }, null);
     }
 
     try self.renderFinal();

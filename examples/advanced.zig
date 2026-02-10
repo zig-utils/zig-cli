@@ -1,8 +1,10 @@
 const std = @import("std");
 const cli = @import("zig-cli");
 
-fn createAction(ctx: *cli.Command.ParseContext) !void {
-    const stdout = std.io.getStdOut().writer();
+fn createAction(ctx: *cli.BaseCommand.ParseContext) !void {
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buf);
+    const stdout = &file_writer.interface;
 
     const name = ctx.getArgument(0) orelse return error.MissingName;
     const template = ctx.getOption("template") orelse "default";
@@ -11,10 +13,13 @@ fn createAction(ctx: *cli.Command.ParseContext) !void {
     try stdout.print("Creating project: {s}\n", .{name});
     try stdout.print("Template: {s}\n", .{template});
     try stdout.print("Force: {s}\n", .{if (force) "yes" else "no"});
+    try stdout.flush();
 }
 
-fn buildAction(ctx: *cli.Command.ParseContext) !void {
-    const stdout = std.io.getStdOut().writer();
+fn buildAction(ctx: *cli.BaseCommand.ParseContext) !void {
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buf);
+    const stdout = &file_writer.interface;
 
     const mode = ctx.getOption("mode") orelse "debug";
     const optimize_str = ctx.getOption("optimize") orelse "false";
@@ -29,10 +34,13 @@ fn buildAction(ctx: *cli.Command.ParseContext) !void {
     while (ctx.getArgument(i)) |target| : (i += 1) {
         try stdout.print("Target: {s}\n", .{target});
     }
+    try stdout.flush();
 }
 
-fn testAction(ctx: *cli.Command.ParseContext) !void {
-    const stdout = std.io.getStdOut().writer();
+fn testAction(ctx: *cli.BaseCommand.ParseContext) !void {
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buf);
+    const stdout = &file_writer.interface;
 
     const filter = ctx.getOption("filter");
     const verbose = ctx.hasOption("verbose");
@@ -42,24 +50,25 @@ fn testAction(ctx: *cli.Command.ParseContext) !void {
         try stdout.print("Filter: {s}\n", .{f});
     }
     try stdout.print("Verbose: {s}\n", .{if (verbose) "yes" else "no"});
+    try stdout.flush();
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
-    // Create CLI application
-    var app = try cli.CLI.init(
+    // Create root command
+    const root_cmd = try cli.BaseCommand.init(
         allocator,
         "advanced-cli",
-        "2.0.0",
         "An advanced CLI application demonstrating complex features",
     );
-    defer app.deinit();
+    defer {
+        root_cmd.deinit();
+        allocator.destroy(root_cmd);
+    }
 
     // Create 'create' command
-    const create_cmd = try cli.Command.init(allocator, "create", "Create a new project");
+    const create_cmd = try cli.BaseCommand.init(allocator, "create", "Create a new project");
 
     const create_name_arg = cli.Argument.init("name", "Project name", .string);
     _ = try create_cmd.addArgument(create_name_arg);
@@ -74,10 +83,10 @@ pub fn main() !void {
     _ = try create_cmd.addOption(force_opt);
 
     _ = create_cmd.setAction(createAction);
-    _ = try app.command(create_cmd);
+    _ = try root_cmd.addCommand(create_cmd);
 
     // Create 'build' command
-    const build_cmd = try cli.Command.init(allocator, "build", "Build the project");
+    const build_cmd = try cli.BaseCommand.init(allocator, "build", "Build the project");
 
     const mode_opt = cli.Option.init("mode", "mode", "Build mode (debug/release)", .string)
         .withShort('m')
@@ -94,10 +103,10 @@ pub fn main() !void {
     _ = try build_cmd.addArgument(targets_arg);
 
     _ = build_cmd.setAction(buildAction);
-    _ = try app.command(build_cmd);
+    _ = try root_cmd.addCommand(build_cmd);
 
     // Create 'test' command
-    const test_cmd = try cli.Command.init(allocator, "test", "Run tests");
+    const test_cmd = try cli.BaseCommand.init(allocator, "test", "Run tests");
 
     const filter_opt = cli.Option.init("filter", "filter", "Filter tests by name", .string)
         .withShort('f');
@@ -108,11 +117,17 @@ pub fn main() !void {
     _ = try test_cmd.addOption(verbose_opt);
 
     _ = test_cmd.setAction(testAction);
-    _ = try app.command(test_cmd);
+    _ = try root_cmd.addCommand(test_cmd);
 
-    // Parse command line arguments
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    // Collect command line arguments
+    var args_list = std.ArrayList([]const u8){};
+    defer args_list.deinit(allocator);
+    var args_iter = std.process.Args.Iterator.init(init.minimal.args);
+    _ = args_iter.skip(); // skip program name
+    while (args_iter.next()) |arg| {
+        try args_list.append(allocator, arg);
+    }
 
-    try app.parse(args);
+    var parser = cli.Parser.init(allocator);
+    try parser.parse(root_cmd, args_list.items);
 }

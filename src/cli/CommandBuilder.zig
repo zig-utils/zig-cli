@@ -85,7 +85,7 @@ pub fn TypedCommand(comptime T: type) type {
             return opt;
         }
 
-        pub fn setAction(self: *Self, action: TypedAction(T)) *Self {
+        pub fn setAction(self: *Self, comptime action: TypedAction(T)) *Self {
             self.command.action = wrapTypedAction(T, action);
             return self;
         }
@@ -189,7 +189,7 @@ pub fn TypedAction(comptime T: type) type {
 }
 
 /// Wrap a typed action to work with the regular Command.ParseContext
-fn wrapTypedAction(comptime T: type, typed_action: TypedAction(T)) Command.CommandAction {
+fn wrapTypedAction(comptime T: type, comptime typed_action: TypedAction(T)) Command.CommandAction {
     const Wrapper = struct {
         fn wrapper(ctx: *Command.ParseContext) anyerror!void {
             var typed_ctx = TypedContext(T).init(ctx);

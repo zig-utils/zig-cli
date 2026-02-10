@@ -5,6 +5,10 @@ const Json5Parser = @import("Json5Parser.zig");
 
 const Config = @This();
 
+fn getIo() std.Io {
+    return std.Options.debug_io;
+}
+
 pub const ConfigFormat = enum {
     toml,
     jsonc,
@@ -149,10 +153,14 @@ pub fn deinit(self: *Config) void {
 
 /// Load config from a file
 pub fn loadFromFile(self: *Config, path: []const u8, format: ConfigFormat) !void {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
+    const io = getIo();
+    const cwd: std.Io.Dir = .cwd();
+    const file = try cwd.openFile(io, path, .{});
+    defer file.close(io);
 
-    const content = try file.readToEndAlloc(self.allocator, 10 * 1024 * 1024); // 10MB max
+    var read_buf: [4096]u8 = undefined;
+    var reader = file.readerStreaming(io, &read_buf);
+    const content = try reader.interface.allocRemaining(self.allocator, .unlimited);
     defer self.allocator.free(content);
 
     const actual_format = if (format == .auto) ConfigFormat.fromPath(path) else format;
@@ -215,16 +223,23 @@ pub fn loadFromString(self: *Config, content: []const u8, format: ConfigFormat) 
     }
 }
 
+fn getHomeDir() ?[]const u8 {
+    const ptr = std.c.getenv("HOME") orelse return null;
+    return std.mem.sliceTo(ptr, 0);
+}
+
 /// Discover and load config files automatically
 pub fn discover(allocator: std.mem.Allocator, app_name: []const u8) !Config {
     var config = Config.init(allocator);
     errdefer config.deinit();
 
+    const home = getHomeDir() orelse ".";
+
     // Try to find config files in order of precedence
     const search_paths = [_][]const u8{
-        ".",                              // Current directory
+        ".", // Current directory
         try std.fs.path.join(allocator, &[_][]const u8{ ".", ".config" }),
-        try std.fs.path.join(allocator, &[_][]const u8{ std.os.getenv("HOME") orelse ".", ".config", app_name }),
+        try std.fs.path.join(allocator, &[_][]const u8{ home, ".config", app_name }),
     };
     defer {
         for (search_paths[1..]) |p| allocator.free(p);

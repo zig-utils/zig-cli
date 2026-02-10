@@ -1,18 +1,24 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const posix = std.posix;
 
 const Terminal = @This();
 
+/// Get a basic Io instance for synchronous operations
+fn getIo() std.Io {
+    return std.Options.debug_io;
+}
+
 pub const RawMode = struct {
-    original_termios: if (builtin.os.tag != .windows) std.posix.termios else void,
+    original_termios: if (builtin.os.tag != .windows) posix.termios else void,
 
     pub fn enable() !RawMode {
-        const stdin = std.io.getStdIn();
         if (builtin.os.tag == .windows) {
             // Windows terminal setup would go here
             return RawMode{ .original_termios = {} };
         } else {
-            const original = try std.posix.tcgetattr(stdin.handle);
+            const stdin = std.Io.File.stdin();
+            const original = try posix.tcgetattr(stdin.handle);
             var raw = original;
 
             // Disable canonical mode and echo
@@ -21,10 +27,10 @@ pub const RawMode = struct {
             raw.lflag.ISIG = false;
 
             // Set read to return immediately
-            raw.cc[@intFromEnum(std.posix.V.MIN)] = 0;
-            raw.cc[@intFromEnum(std.posix.V.TIME)] = 1;
+            raw.cc[@intFromEnum(posix.V.MIN)] = 0;
+            raw.cc[@intFromEnum(posix.V.TIME)] = 1;
 
-            try std.posix.tcsetattr(stdin.handle, .FLUSH, raw);
+            try posix.tcsetattr(stdin.handle, .FLUSH, raw);
 
             return RawMode{ .original_termios = original };
         }
@@ -34,8 +40,8 @@ pub const RawMode = struct {
         if (builtin.os.tag == .windows) {
             return;
         }
-        const stdin = std.io.getStdIn();
-        std.posix.tcsetattr(stdin.handle, .FLUSH, self.original_termios) catch {};
+        const stdin = std.Io.File.stdin();
+        posix.tcsetattr(stdin.handle, .FLUSH, self.original_termios) catch {};
     }
 };
 
@@ -62,8 +68,8 @@ pub const KeyPress = struct {
     char: ?u8 = null,
 };
 
-stdin: std.fs.File,
-stdout: std.fs.File,
+stdin: std.Io.File,
+stdout: std.Io.File,
 supports_unicode: bool,
 supports_color: bool,
 width: usize,
@@ -75,8 +81,8 @@ pub fn init() Terminal {
     const size = detectTerminalSize();
 
     return .{
-        .stdin = std.io.getStdIn(),
-        .stdout = std.io.getStdOut(),
+        .stdin = std.Io.File.stdin(),
+        .stdout = std.Io.File.stdout(),
         .supports_unicode = supports_unicode,
         .supports_color = supports_color,
         .width = size.width,
@@ -84,8 +90,17 @@ pub fn init() Terminal {
     };
 }
 
+fn getEnv(comptime name: [:0]const u8) ?[*:0]const u8 {
+    return std.c.getenv(name);
+}
+
+fn envSlice(comptime name: [:0]const u8) ?[]const u8 {
+    const ptr = getEnv(name) orelse return null;
+    return std.mem.sliceTo(ptr, 0);
+}
+
 fn detectUnicodeSupport() bool {
-    if (std.posix.getenv("LANG")) |lang| {
+    if (envSlice("LANG")) |lang| {
         return std.mem.indexOf(u8, lang, "UTF-8") != null or
             std.mem.indexOf(u8, lang, "utf8") != null;
     }
@@ -93,10 +108,10 @@ fn detectUnicodeSupport() bool {
 }
 
 fn detectColorSupport() bool {
-    if (std.posix.getenv("NO_COLOR")) |_| {
+    if (getEnv("NO_COLOR")) |_| {
         return false;
     }
-    if (std.posix.getenv("TERM")) |term| {
+    if (envSlice("TERM")) |term| {
         return !std.mem.eql(u8, term, "dumb");
     }
     return true;
@@ -114,14 +129,14 @@ fn detectTerminalSize() TerminalSize {
     }
 
     // Try to get terminal size via ioctl
-    const stdout = std.io.getStdOut();
-    var winsize: std.posix.system.winsize = undefined;
+    const stdout = std.Io.File.stdout();
+    var winsize: posix.system.winsize = undefined;
 
-    const result = std.posix.system.ioctl(stdout.handle, std.posix.T.IOCGWINSZ, @intFromPtr(&winsize));
-    if (result == 0 and winsize.ws_col > 0 and winsize.ws_row > 0) {
+    const result = posix.system.ioctl(stdout.handle, posix.T.IOCGWINSZ, @intFromPtr(&winsize));
+    if (result == 0 and winsize.col > 0 and winsize.row > 0) {
         return .{
-            .width = winsize.ws_col,
-            .height = winsize.ws_row,
+            .width = winsize.col,
+            .height = winsize.row,
         };
     }
 
@@ -131,7 +146,10 @@ fn detectTerminalSize() TerminalSize {
 
 pub fn readKey(self: *Terminal) !?KeyPress {
     var buf: [8]u8 = undefined;
-    const n = try self.stdin.read(&buf);
+    const n = posix.read(self.stdin.handle, &buf) catch |err| switch (err) {
+        error.WouldBlock => return null,
+        else => return err,
+    };
 
     if (n == 0) return null;
 
@@ -168,12 +186,12 @@ pub fn readKey(self: *Terminal) !?KeyPress {
 }
 
 pub fn write(self: *Terminal, text: []const u8) !void {
-    try self.stdout.writeAll(text);
+    try self.stdout.writeStreamingAll(getIo(), text);
 }
 
 pub fn writeLine(self: *Terminal, text: []const u8) !void {
-    try self.stdout.writeAll(text);
-    try self.stdout.writeAll("\n");
+    try self.stdout.writeStreamingAll(getIo(), text);
+    try self.stdout.writeStreamingAll(getIo(), "\n");
 }
 
 pub fn clearScreen(self: *Terminal) !void {

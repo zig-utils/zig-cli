@@ -139,7 +139,7 @@ pub fn TypedConfig(comptime T: type) type {
                 return error.MissingRequiredField;
             }
 
-            const value = config_value.?;
+            const value = config_value.?.*;
             const parsed = try parseValue(base_type, allocator, config, key, value);
 
             if (is_optional) {

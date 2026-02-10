@@ -8,11 +8,11 @@ const cli = @import("zig-cli");
 /// Define your command options as a struct
 /// Fields are automatically converted to CLI options with proper types
 const GreetOptions = struct {
-    name: []const u8,              // Required string option
-    age: ?u16 = null,              // Optional integer
-    times: u8 = 1,                 // Integer with default
-    verbose: bool = false,         // Boolean flag with default
-    format: OutputFormat = .text, // Enum with default
+    name: []const u8,
+    age: ?u16 = null,
+    times: u8 = 1,
+    verbose: bool = false,
+    format: OutputFormat = .text,
 };
 
 const OutputFormat = enum {
@@ -23,14 +23,16 @@ const OutputFormat = enum {
 
 /// Type-safe action function - gets typed context instead of strings
 fn greetAction(ctx: *cli.Context(GreetOptions)) !void {
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buf);
+    const stdout = &file_writer.interface;
 
     // Compile-time validated field access - no string lookups!
-    const name = ctx.get(.name);      // Returns []const u8, never null
-    const age = ctx.get(.age);        // Returns ?u16
-    const times = ctx.get(.times);    // Returns u8 with default
-    const verbose = ctx.get(.verbose); // Returns bool
-    const format = ctx.get(.format);  // Returns OutputFormat enum
+    const name = ctx.get(.name);
+    const age = ctx.get(.age);
+    const times = ctx.get(.times);
+    const verbose = ctx.get(.verbose);
+    const format = ctx.get(.format);
 
     // Or parse entire struct at once
     const opts = try ctx.parse();
@@ -70,6 +72,7 @@ fn greetAction(ctx: *cli.Context(GreetOptions)) !void {
             }
         },
     }
+    try stdout.flush();
 }
 
 // ============================================================================
@@ -99,7 +102,9 @@ const LogLevel = enum {
 };
 
 fn showTypedConfig(allocator: std.mem.Allocator) !void {
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buf);
+    const stdout = &file_writer.interface;
 
     try stdout.print("\n=== Type-Safe Config Example ===\n", .{});
 
@@ -135,6 +140,7 @@ fn showTypedConfig(allocator: std.mem.Allocator) !void {
     try stdout.print("Max Connections: {d}\n", .{config.value.database.max_connections});
     try stdout.print("Log Level: {s}\n", .{@tagName(config.value.log_level)});
     try stdout.print("Debug: {}\n", .{config.value.debug});
+    try stdout.flush();
 }
 
 // ============================================================================
@@ -146,7 +152,9 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buf);
+    const stdout = &file_writer.interface;
 
     try stdout.print("=== zig-cli Type-Safe API Examples ===\n\n", .{});
 
@@ -177,19 +185,21 @@ pub fn main() !void {
     }
 
     // Example 2: Type-safe config
+    try stdout.flush();
     try showTypedConfig(allocator);
 
     // Benefits summary
     try stdout.print("\n=== Type Safety Benefits ===\n", .{});
-    try stdout.print("✅ Compile-time field validation\n", .{});
-    try stdout.print("✅ No string-based lookups\n", .{});
-    try stdout.print("✅ Automatic type conversion\n", .{});
-    try stdout.print("✅ IDE autocomplete support\n", .{});
-    try stdout.print("✅ Catch errors at compile time, not runtime\n", .{});
-    try stdout.print("✅ Zero-cost abstractions\n", .{});
+    try stdout.print("  Compile-time field validation\n", .{});
+    try stdout.print("  No string-based lookups\n", .{});
+    try stdout.print("  Automatic type conversion\n", .{});
+    try stdout.print("  IDE autocomplete support\n", .{});
+    try stdout.print("  Catch errors at compile time, not runtime\n", .{});
+    try stdout.print("  Zero-cost abstractions\n", .{});
 
     try stdout.print("\nComparison:\n", .{});
     try stdout.print("Runtime API:  ctx.getOption(\"name\") -> ?[]const u8\n", .{});
     try stdout.print("Typed API:    ctx.get(.name)        -> []const u8\n", .{});
     try stdout.print("              ^^^^^^^^ Compile-time validated enum field!\n", .{});
+    try stdout.flush();
 }

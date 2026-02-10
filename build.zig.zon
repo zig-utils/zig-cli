@@ -1,0 +1,13 @@
+.{
+    .name = .zig_cli,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.14.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "examples",
+        "README.md",
+    },
+    .fingerprint = 0xf544320ed4f9c4d7,
+}

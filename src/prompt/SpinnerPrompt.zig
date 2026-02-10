@@ -78,7 +78,7 @@ fn spinnerLoop(self: *SpinnerPrompt) void {
         self.terminal.write(self.message) catch {};
 
         // Sleep for animation frame
-        std.time.sleep(80 * std.time.ns_per_ms);
+        _ = std.c.nanosleep(&.{ .sec = 0, .nsec = 80 * std.time.ns_per_ms }, null);
         frame += 1;
     }
 }

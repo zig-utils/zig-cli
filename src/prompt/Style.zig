@@ -174,47 +174,47 @@ pub const Style = struct {
         }
 
         // Build ANSI code sequence
-        var codes = std.ArrayList(u8){};
-        defer codes.deinit();
+        var codes: std.ArrayList(u8) = .{};
+        defer codes.deinit(self.allocator);
 
         var first = true;
 
         // Styles
         if (self.bold_enabled) {
-            if (!first) try codes.append(';');
-            try codes.writer().print("{d}", .{Ansi.Style.bold.toCode()});
+            if (!first) try codes.append(self.allocator, ';');
+            try codes.print(self.allocator, "{d}", .{Ansi.Style.bold.toCode()});
             first = false;
         }
 
         if (self.dim_enabled) {
-            if (!first) try codes.append(';');
-            try codes.writer().print("{d}", .{Ansi.Style.dim.toCode()});
+            if (!first) try codes.append(self.allocator, ';');
+            try codes.print(self.allocator, "{d}", .{Ansi.Style.dim.toCode()});
             first = false;
         }
 
         if (self.italic_enabled) {
-            if (!first) try codes.append(';');
-            try codes.writer().print("{d}", .{Ansi.Style.italic.toCode()});
+            if (!first) try codes.append(self.allocator, ';');
+            try codes.print(self.allocator, "{d}", .{Ansi.Style.italic.toCode()});
             first = false;
         }
 
         if (self.underline_enabled) {
-            if (!first) try codes.append(';');
-            try codes.writer().print("{d}", .{Ansi.Style.underline.toCode()});
+            if (!first) try codes.append(self.allocator, ';');
+            try codes.print(self.allocator, "{d}", .{Ansi.Style.underline.toCode()});
             first = false;
         }
 
         // Foreground color
         if (self.color) |color| {
-            if (!first) try codes.append(';');
-            try codes.writer().print("{d}", .{color.toCode()});
+            if (!first) try codes.append(self.allocator, ';');
+            try codes.print(self.allocator, "{d}", .{color.toCode()});
             first = false;
         }
 
         // Background color
         if (self.bg_color) |bg| {
-            if (!first) try codes.append(';');
-            try codes.writer().print("{d}", .{bg.toCode() + 10}); // BG is FG + 10
+            if (!first) try codes.append(self.allocator, ';');
+            try codes.print(self.allocator, "{d}", .{bg.toCode() + 10}); // BG is FG + 10
             first = false;
         }
 
@@ -231,8 +231,8 @@ pub const Style = struct {
         const styled = try self.render();
         defer self.allocator.free(styled);
 
-        const stdout = std.io.getStdOut().writer();
-        try stdout.print("{s}", .{styled});
+        const io = std.Options.debug_io;
+        try std.Io.File.stdout().writeStreamingAll(io, styled);
     }
 
     /// Convenience method to render and return with newline
@@ -240,8 +240,10 @@ pub const Style = struct {
         const styled = try self.render();
         defer self.allocator.free(styled);
 
-        const stdout = std.io.getStdOut().writer();
-        try stdout.print("{s}\n", .{styled});
+        const io = std.Options.debug_io;
+        const stdout = std.Io.File.stdout();
+        try stdout.writeStreamingAll(io, styled);
+        try stdout.writeStreamingAll(io, "\n");
     }
 };
 

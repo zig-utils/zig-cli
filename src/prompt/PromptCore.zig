@@ -27,7 +27,7 @@ pub fn init(allocator: std.mem.Allocator) PromptCore {
 }
 
 pub fn deinit(self: *PromptCore) void {
-    self.value.deinit();
+    self.value.deinit(self.allocator);
     if (self.raw_mode) |rm| {
         rm.disable();
     }
@@ -58,15 +58,15 @@ pub fn transitionTo(self: *PromptCore, new_state: PromptState.State) void {
 
 pub fn setValue(self: *PromptCore, value: []const u8) !void {
     self.value.clearRetainingCapacity();
-    try self.value.appendSlice(value);
+    try self.value.appendSlice(self.allocator, value);
     self.cursor = value.len;
 }
 
 pub fn appendChar(self: *PromptCore, char: u8) !void {
     if (self.cursor >= self.value.items.len) {
-        try self.value.append(char);
+        try self.value.append(self.allocator, char);
     } else {
-        try self.value.insert(self.cursor, char);
+        try self.value.insert(self.allocator, self.cursor, char);
     }
     self.cursor += 1;
 }

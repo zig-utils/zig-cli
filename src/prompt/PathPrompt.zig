@@ -5,6 +5,10 @@ const Ansi = @import("Ansi.zig");
 
 const PathPrompt = @This();
 
+fn getIo() std.Io {
+    return std.Options.debug_io;
+}
+
 pub const PathType = enum {
     file,
     directory,
@@ -25,7 +29,7 @@ pub fn init(allocator: std.mem.Allocator, message: []const u8, path_type: PathTy
         .message = message,
         .path_type = path_type,
         .must_exist = false,
-        .suggestions = std.ArrayList([]const u8){},
+        .suggestions = .{},
         .selected_suggestion = 0,
         .show_suggestions = false,
     };
@@ -35,7 +39,7 @@ pub fn deinit(self: *PathPrompt) void {
     for (self.suggestions.items) |suggestion| {
         self.core.allocator.free(suggestion);
     }
-    self.suggestions.deinit();
+    self.suggestions.deinit(self.core.allocator);
     self.core.deinit();
 }
 
@@ -82,15 +86,17 @@ fn handleKey(self: *PathPrompt, key: Terminal.KeyPress) !void {
             } else {
                 // Submit
                 const value = self.core.getValue();
+                const io = getIo();
+                const cwd: std.Io.Dir = .cwd();
 
                 if (self.must_exist) {
-                    std.fs.cwd().access(value, .{}) catch {
+                    cwd.access(io, value, .{}) catch {
                         self.core.setError("Path does not exist");
                         return;
                     };
 
                     // Check type
-                    const stat = std.fs.cwd().statFile(value) catch {
+                    const stat = cwd.statFile(io, value, .{}) catch {
                         self.core.setError("Cannot access path");
                         return;
                     };
@@ -197,14 +203,16 @@ fn updateSuggestions(self: *PathPrompt) !void {
     const file_prefix = std.fs.path.basename(value);
 
     // Open directory
-    var dir = std.fs.cwd().openDir(dir_path, .{ .iterate = true }) catch {
+    const io = getIo();
+    const cwd: std.Io.Dir = .cwd();
+    var dir = cwd.openDir(io, dir_path, .{ .iterate = true }) catch {
         return; // Can't open, no suggestions
     };
-    defer dir.close();
+    defer dir.close(io);
 
     var iter = dir.iterate();
     var count: usize = 0;
-    while (try iter.next()) |entry| {
+    while (try iter.next(io)) |entry| {
         if (count >= 10) break; // Limit to 10 suggestions
 
         // Filter by type
@@ -221,7 +229,7 @@ fn updateSuggestions(self: *PathPrompt) !void {
 
         // Build full path
         const full_path = try std.fs.path.join(self.core.allocator, &[_][]const u8{ dir_path, entry.name });
-        try self.suggestions.append(self.allocator, full_path);
+        try self.suggestions.append(self.core.allocator, full_path);
         count += 1;
     }
 }

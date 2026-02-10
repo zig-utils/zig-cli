@@ -39,9 +39,9 @@ pub fn discover(comptime T: type, allocator: std.mem.Allocator, app_name: []cons
 }
 
 // Re-export types
-const BaseConfig = @import("Config.zig");
-pub const Format = BaseConfig.ConfigFormat;
-pub const Value = BaseConfig.Value;
+pub const Config = @import("Config.zig");
+pub const Format = Config.ConfigFormat;
+pub const Value = Config.Value;
 
 // Parsers (for advanced use)
 pub const TomlParser = @import("TomlParser.zig");

@@ -9,9 +9,18 @@ pub fn init(allocator: std.mem.Allocator) Help {
     return .{ .allocator = allocator };
 }
 
+fn getWriter() std.Io.File.Writer {
+    const io = std.Options.debug_io;
+    var buf: [4096]u8 = undefined;
+    return std.Io.File.stdout().writerStreaming(io, &buf);
+}
+
 pub fn generate(self: *Help, command: *Command, cli_name: []const u8, version: []const u8) !void {
     _ = self;
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    const io = std.Options.debug_io;
+    var file_writer = std.Io.File.stdout().writerStreaming(io, &buf);
+    const stdout = &file_writer.interface;
 
     // Header
     try stdout.print("\n{s} v{s}\n", .{ cli_name, version });
@@ -50,7 +59,7 @@ pub fn generate(self: *Help, command: *Command, cli_name: []const u8, version: [
                 try stdout.print("...", .{});
             }
             const padding = 20 -| (arg.name.len + 2 + if (arg.variadic) @as(usize, 3) else @as(usize, 0));
-            try stdout.writeByteNTimes(' ', padding);
+            for (0..padding) |_| try stdout.writeByte(' ');
             try stdout.print("{s}", .{arg.description});
             if (!arg.required) {
                 try stdout.print(" (optional)", .{});
@@ -89,7 +98,7 @@ pub fn generate(self: *Help, command: *Command, cli_name: []const u8, version: [
             }
 
             const padding = 30 -| length;
-            try stdout.writeByteNTimes(' ', padding);
+            for (0..padding) |_| try stdout.writeByte(' ');
 
             try stdout.print("{s}", .{opt.description});
 
@@ -103,7 +112,7 @@ pub fn generate(self: *Help, command: *Command, cli_name: []const u8, version: [
         }
 
         try stdout.print("  -h, --help", .{});
-        try stdout.writeByteNTimes(' ', 20);
+        for (0..20) |_| try stdout.writeByte(' ');
         try stdout.print("Print help\n", .{});
         try stdout.print("\n", .{});
     }
@@ -114,10 +123,12 @@ pub fn generate(self: *Help, command: *Command, cli_name: []const u8, version: [
         for (command.subcommands.items) |subcmd| {
             try stdout.print("  {s}", .{subcmd.name});
             const padding = 20 -| subcmd.name.len;
-            try stdout.writeByteNTimes(' ', padding);
+            for (0..padding) |_| try stdout.writeByte(' ');
             try stdout.print("{s}\n", .{subcmd.description});
         }
         try stdout.print("\n", .{});
         try stdout.print("Run '{s} <COMMAND> --help' for more information on a command.\n\n", .{command.name});
     }
+
+    try stdout.flush();
 }

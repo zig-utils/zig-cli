@@ -58,16 +58,16 @@ pub const MiddlewareChain = struct {
     pub fn init(allocator: std.mem.Allocator) MiddlewareChain {
         return .{
             .allocator = allocator,
-            .middlewares = std.ArrayList(Middleware).init(allocator),
+            .middlewares = .{},
         };
     }
 
     pub fn deinit(self: *MiddlewareChain) void {
-        self.middlewares.deinit();
+        self.middlewares.deinit(self.allocator);
     }
 
     pub fn use(self: *MiddlewareChain, middleware: Middleware) !void {
-        try self.middlewares.append(middleware);
+        try self.middlewares.append(self.allocator, middleware);
 
         // Sort by order
         std.mem.sort(Middleware, self.middlewares.items, {}, compareMiddleware);
@@ -90,10 +90,23 @@ pub const MiddlewareChain = struct {
 
 // Built-in middleware
 
+fn stdoutWriter() StdoutWriter {
+    var buf: [4096]u8 = undefined;
+    return .{
+        .file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buf),
+    };
+}
+
+const StdoutWriter = struct {
+    file_writer: std.Io.File.Writer,
+};
+
 /// Logging middleware
 pub fn loggingMiddleware(ctx: *MiddlewareContext) !bool {
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("[LOG] Executing command: {s}\n", .{ctx.command.name});
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buf);
+    try file_writer.interface.print("[LOG] Executing command: {s}\n", .{ctx.command.name});
+    try file_writer.interface.flush();
     return true;
 }
 
@@ -109,8 +122,10 @@ pub fn validationMiddleware(ctx: *MiddlewareContext) !bool {
     // Check if all required options are present
     for (ctx.command.options.items) |opt| {
         if (opt.required and !ctx.parse_context.hasOption(opt.name)) {
-            const stderr = std.io.getStdErr().writer();
-            try stderr.print("Error: Missing required option '--{s}'\n", .{opt.long});
+            var buf: [4096]u8 = undefined;
+            var file_writer = std.Io.File.stderr().writerStreaming(std.Options.debug_io, &buf);
+            try file_writer.interface.print("Error: Missing required option '--{s}'\n", .{opt.long});
+            try file_writer.interface.flush();
             return false;
         }
     }
@@ -120,7 +135,7 @@ pub fn validationMiddleware(ctx: *MiddlewareContext) !bool {
 /// Environment check middleware
 pub fn environmentCheckMiddleware(ctx: *MiddlewareContext) !bool {
     // Example: Check if running in CI
-    if (std.os.getenv("CI")) |_| {
+    if (std.c.getenv("CI")) |_| {
         try ctx.set("ci_mode", "true");
     }
     return true;

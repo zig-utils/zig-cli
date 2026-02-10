@@ -3,15 +3,17 @@ const cli = @import("zig-cli");
 
 // Define your CLI options as a struct - that's it!
 const GreetOptions = struct {
-    name: []const u8,              // Required
-    age: ?u16 = null,              // Optional
-    times: u8 = 1,                 // With default
-    enthusiastic: bool = false,    // Boolean flag
+    name: []const u8,
+    age: ?u16 = null,
+    times: u8 = 1,
+    enthusiastic: bool = false,
 };
 
 // Type-safe action - no string lookups!
 fn greet(ctx: *cli.Context(GreetOptions)) !void {
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(std.Options.debug_io, &buf);
+    const stdout = &file_writer.interface;
 
     // Compile-time validated field access
     const name = ctx.get(.name);
@@ -29,22 +31,27 @@ fn greet(ctx: *cli.Context(GreetOptions)) !void {
         }
         try stdout.print("{s}\n", .{punct});
     }
+    try stdout.flush();
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
     // Create command - options auto-generated from struct!
-    var cmd = try cli.command(GreetOptions).init(allocator, "greet", "Greet someone");
+    var cmd = try cli.Command(GreetOptions).init(allocator, "greet", "Greet someone");
     defer cmd.deinit();
 
     _ = cmd.setAction(greet);
 
-    // Parse and execute
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    // Collect command line arguments
+    var args_list = std.ArrayList([]const u8){};
+    defer args_list.deinit(allocator);
+    var args_iter = std.process.Args.Iterator.init(init.minimal.args);
+    _ = args_iter.skip(); // skip program name
+    while (args_iter.next()) |arg| {
+        try args_list.append(allocator, arg);
+    }
 
-    try cli.Parser.init(allocator).parse(cmd.getCommand(), args[1..]);
+    var parser = cli.Parser.init(allocator);
+    try parser.parse(cmd.getCommand(), args_list.items);
 }
