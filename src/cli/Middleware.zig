@@ -112,7 +112,11 @@ pub fn loggingMiddleware(ctx: *MiddlewareContext) !bool {
 
 /// Timing middleware
 pub fn timingMiddleware(ctx: *MiddlewareContext) !bool {
-    const start = std.time.milliTimestamp();
+    const start = blk: {
+        var ts: std.c.timespec = .{ .sec = 0, .nsec = 0 };
+        _ = std.c.clock_gettime(std.c.CLOCK.REALTIME, &ts);
+        break :blk @as(i64, ts.sec) * 1000 + @as(i64, @intCast(@divTrunc(ts.nsec, std.time.ns_per_ms)));
+    };
     try ctx.set("start_time", try std.fmt.allocPrint(ctx.allocator, "{d}", .{start}));
     return true;
 }

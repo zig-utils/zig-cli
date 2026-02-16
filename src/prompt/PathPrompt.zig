@@ -62,7 +62,10 @@ pub fn prompt(self: *PathPrompt) ![]const u8 {
             continue;
         }
 
-        std.time.sleep(10 * std.time.ns_per_ms);
+        {
+            var ts: std.c.timespec = .{ .sec = 0, .nsec = 10 * std.time.ns_per_ms };
+            _ = std.c.nanosleep(&ts, null);
+        }
     }
 
     try self.core.finish();

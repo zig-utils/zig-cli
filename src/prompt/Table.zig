@@ -11,10 +11,10 @@ pub const Alignment = enum {
 };
 
 pub const TableStyle = enum {
-    simple,     // Simple ASCII
-    rounded,    // Rounded corners
-    double,     // Double lines
-    minimal,    // Minimal borders
+    simple, // Simple ASCII
+    rounded, // Rounded corners
+    double, // Double lines
+    minimal, // Minimal borders
 };
 
 pub const Column = struct {
@@ -47,7 +47,7 @@ pub fn deinit(self: *Table) void {
     for (self.rows.items) |row| {
         self.allocator.free(row);
     }
-    self.rows.deinit();
+    self.rows.deinit(self.allocator);
 }
 
 pub fn withStyle(self: Table, style: TableStyle) Table {
@@ -62,7 +62,7 @@ pub fn addRow(self: *Table, row: []const []const u8) !void {
     }
 
     const row_copy = try self.allocator.dupe([]const u8, row);
-    try self.rows.append(row_copy);
+    try self.rows.append(self.allocator, row_copy);
 }
 
 pub fn render(self: *Table) !void {
