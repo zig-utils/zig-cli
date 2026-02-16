@@ -1,6 +1,6 @@
 # zig-cli
 
-A **type-safe, compile-time validated** CLI library for Zig. Define your CLI with structs, get full type safety and zero runtime overhead.
+A **type-safe, compile-time validated** CLI library for Zig 0.16+. Define your CLI with structs, get full type safety and zero runtime overhead.
 
 **No string-based lookups. No runtime parsing. Just pure, type-safe Zig.**
 
@@ -33,7 +33,7 @@ Inspired by modern CLI frameworks, built for Zig's strengths.
 - **Middleware System**: Type-safe pre/post command hooks
 
 ### Interactive Prompts
-- **State Machine**: Clean 5-state state machine (initial → active ↔ error → submit/cancel)
+- **State Machine**: Clean 5-state state machine (initial -> active <-> error -> submit/cancel)
 - **Event-driven**: Fine-grained event system for prompt interactions
 - **Terminal Detection**: Automatic Unicode/ASCII and color support detection
 - **Multiple Prompt Types**:
@@ -97,41 +97,51 @@ const GreetOptions = struct {
 
 // 2. Type-safe action function
 fn greet(ctx: *cli.Context(GreetOptions)) !void {
-    const stdout = std.io.getStdOut().writer();
+    const io = std.Options.debug_io;
+    var buf: [4096]u8 = undefined;
+    var file_writer = std.Io.File.stdout().writerStreaming(io, &buf);
+    const stdout = &file_writer.interface;
 
     // Compile-time validated field access - no strings!
     const name = ctx.get(.name);
     const punct: []const u8 = if (ctx.get(.enthusiastic)) "!" else ".";
 
-    try stdout.print("Hello, {s}{s}\n", .{name, punct});
+    try stdout.print("Hello, {s}{s}\n", .{ name, punct });
+    try stdout.flush();
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
     // 3. Create command - options auto-generated!
-    var cmd = try cli.command(GreetOptions).init(allocator, "greet", "Greet someone");
+    var cmd = try cli.Command(GreetOptions).init(allocator, "greet", "Greet someone");
     defer cmd.deinit();
 
     _ = cmd.setAction(greet);
 
-    // 4. Parse and execute
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-    try cli.Parser.init(allocator).parse(cmd.getCommand(), args[1..]);
+    // 4. Parse args and execute
+    var args_list = std.ArrayList([]const u8){};
+    defer args_list.deinit(allocator);
+
+    var args_iter = std.process.Args.Iterator.init(init.minimal.args);
+    _ = args_iter.skip(); // skip program name
+    while (args_iter.next()) |arg| {
+        try args_list.append(allocator, arg);
+    }
+
+    var parser = cli.Parser.init(allocator);
+    try parser.parse(cmd.getCommand(), args_list.items);
 }
 ```
 
 That's it! Run with: `myapp greet --name Alice --enthusiastic`
 
 **Benefits:**
-- ✅ Options auto-generated from struct fields
-- ✅ Compile-time validation - typos caught by compiler
-- ✅ Full IDE autocomplete support
-- ✅ No string-based lookups
-- ✅ Zero runtime overhead
+- Options auto-generated from struct fields
+- Compile-time validation - typos caught by compiler
+- Full IDE autocomplete support
+- No string-based lookups
+- Zero runtime overhead
 
 ### Interactive Prompts
 
@@ -155,6 +165,8 @@ pub fn main() !void {
     defer confirm_prompt.deinit();
     const confirmed = try confirm_prompt.prompt();
 
+    _ = confirmed;
+
     // Select prompt
     const choices = [_]prompt.SelectPrompt.Choice{
         .{ .label = "Option 1", .value = "opt1" },
@@ -171,22 +183,78 @@ pub fn main() !void {
 
 ### CLI Framework
 
-#### Creating a CLI Application
+#### Type-Safe Commands (Recommended)
+
+Define your command options as a struct and get compile-time validation:
 
 ```zig
-var app = try cli.CLI.init(allocator, "app-name", "1.0.0", "Description");
-defer app.deinit();
+const GreetOptions = struct {
+    name: []const u8,              // Required string
+    age: ?u16 = null,              // Optional integer
+    times: u8 = 1,                 // With default value
+    verbose: bool = false,         // Boolean flag
+    format: enum { text, json } = .text, // Enum support
+};
+
+fn greetAction(ctx: *cli.Context(GreetOptions)) !void {
+    // Compile-time validated field access - no string lookups!
+    const name = ctx.get(.name);      // Returns []const u8
+    const age = ctx.get(.age);        // Returns ?u16
+    const times = ctx.get(.times);    // Returns u8
+
+    // Or parse entire struct at once
+    const opts = try ctx.parse();
+
+    _ = age;
+    _ = times;
+    std.debug.print("Hello, {s}!\n", .{opts.name});
+}
+
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+
+    // Auto-generates CLI options from struct fields!
+    var cmd = try cli.Command(GreetOptions).init(allocator, "greet", "Greet a user");
+    defer cmd.deinit();
+
+    _ = cmd.setAction(greetAction);
+
+    var args_list = std.ArrayList([]const u8){};
+    defer args_list.deinit(allocator);
+
+    var args_iter = std.process.Args.Iterator.init(init.minimal.args);
+    _ = args_iter.skip();
+    while (args_iter.next()) |arg| {
+        try args_list.append(allocator, arg);
+    }
+
+    var parser = cli.Parser.init(allocator);
+    try parser.parse(cmd.getCommand(), args_list.items);
+}
 ```
 
-#### Adding Options
+Benefits:
+- **Compile-time validation** - field names validated at compile time
+- **IDE autocomplete** - full IntelliSense support
+- **Type safety** - no runtime string parsing or optionals
+- **Auto-generation** - options automatically created from struct
+- **Zero overhead** - comptime code generates efficient runtime
+
+#### Low-Level Command API
+
+For more control, use `BaseCommand` directly:
 
 ```zig
+// Create a base command
+const cmd = try cli.BaseCommand.init(allocator, "myapp", "Description");
+
+// Add options manually
 const option = cli.Option.init("name", "long-name", "Description", .string)
     .withShort('n')              // Short flag (-n)
     .withRequired(true)          // Make it required
     .withDefault("value");       // Set default value
 
-_ = try app.option(option);
+_ = try cmd.addOption(option);
 ```
 
 Option types:
@@ -202,13 +270,13 @@ const arg = cli.Argument.init("name", "Description", .string)
     .withRequired(true)          // Required argument
     .withVariadic(false);        // Accept multiple values
 
-_ = try app.argument(arg);
+_ = try cmd.addArgument(arg);
 ```
 
 #### Creating Subcommands
 
 ```zig
-const subcmd = try cli.Command.init(allocator, "subcmd", "Subcommand description");
+const subcmd = try cli.BaseCommand.init(allocator, "subcmd", "Subcommand description");
 
 // Add aliases for the command
 _ = try subcmd.addAlias("sub");
@@ -218,7 +286,7 @@ const opt = cli.Option.init("opt", "option", "Option description", .string);
 _ = try subcmd.addOption(opt);
 
 _ = subcmd.setAction(myAction);
-_ = try app.command(subcmd);
+_ = try app.addCommand(subcmd);
 ```
 
 Now you can call the subcommand with: `myapp subcmd`, `myapp sub`, or `myapp s`
@@ -266,10 +334,10 @@ Built-in middleware:
 - `validationMiddleware` - Validates required options
 - `environmentCheckMiddleware` - Checks environment variables
 
-#### Command Actions
+#### Command Actions (Low-Level)
 
 ```zig
-fn myAction(ctx: *cli.Command.ParseContext) !void {
+fn myAction(ctx: *cli.BaseCommand.ParseContext) !void {
     // Get option value
     const value = ctx.getOption("name") orelse "default";
 
@@ -283,67 +351,32 @@ fn myAction(ctx: *cli.Command.ParseContext) !void {
 
     // Get argument count
     const count = ctx.getArgumentCount();
+
+    _ = value;
+    _ = arg;
+    _ = count;
 }
 ```
 
-### Type-Safe API (Compile-Time Validated)
-
-zig-cli provides a fully typed API layer that leverages Zig's comptime features for maximum type safety and zero runtime overhead.
-
-#### Type-Safe Commands
-
-Define your command options as a struct and get compile-time validation:
+#### Runtime vs Typed API Comparison
 
 ```zig
-const GreetOptions = struct {
-    name: []const u8,              // Required string
-    age: ?u16 = null,              // Optional integer
-    times: u8 = 1,                 // With default value
-    verbose: bool = false,         // Boolean flag
-    format: enum { text, json } = .text, // Enum support
-};
-
-fn greetAction(ctx: *cli.TypedContext(GreetOptions)) !void {
-    // Compile-time validated field access - no string lookups!
-    const name = ctx.get(.name);      // Returns []const u8
-    const age = ctx.get(.age);        // Returns ?u16
-    const times = ctx.get(.times);    // Returns u8
-
-    // Or parse entire struct at once
-    const opts = try ctx.parse();
-
-    std.debug.print("Hello, {s}!\n", .{opts.name});
+// Runtime API (string-based, via BaseCommand)
+const value = ctx.getOption("name");  // Returns ?[]const u8
+if (value) |v| {
+    const age_str = ctx.getOption("age") orelse "0";
+    const age = try std.fmt.parseInt(u16, age_str, 10);
+    _ = v;
+    _ = age;
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    // Auto-generates CLI options from struct fields!
-    var cmd = try cli.TypedCommand(GreetOptions).init(
-        allocator,
-        "greet",
-        "Greet a user",
-    );
-    defer cmd.deinit();
-
-    _ = cmd.setAction(greetAction);
-
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-
-    // Get underlying command for parsing
-    try cli.Parser.init(allocator).parse(cmd.getCommand(), args[1..]);
-}
+// Typed API (compile-time validated, via cli.Command(T))
+const name = ctx.get(.name);  // Returns []const u8 directly
+const age = ctx.get(.age);    // Returns u16, already parsed
+//              ^^^^^ Compile-time validated enum field!
 ```
 
-Benefits:
-- ✅ **Compile-time validation** - field names validated at compile time
-- ✅ **IDE autocomplete** - full IntelliSense support
-- ✅ **Type safety** - no runtime string parsing or optionals
-- ✅ **Auto-generation** - options automatically created from struct
-- ✅ **Zero overhead** - comptime code generates efficient runtime
+See `examples/typed.zig` for a complete working example.
 
 #### Type-Safe Config
 
@@ -361,7 +394,7 @@ const AppConfig = struct {
 };
 
 // Load with full type checking
-var config = try cli.config.loadTyped(AppConfig, allocator, "config.toml");
+var config = try cli.config.load(AppConfig, allocator, "config.toml");
 defer config.deinit();
 
 // Direct field access - no optionals, no string parsing!
@@ -372,7 +405,7 @@ std.debug.print("DB: {s}:{d}\n", .{
 std.debug.print("Log Level: {s}\n", .{@tagName(config.value.log_level)});
 
 // Auto-discovery also works
-var discovered = try cli.config.discoverTyped(AppConfig, allocator, "myapp");
+var discovered = try cli.config.discover(AppConfig, allocator, "myapp");
 defer discovered.deinit();
 ```
 
@@ -383,58 +416,6 @@ Supported types:
 - Optionals: `?T` for optional fields
 - Nested structs: Arbitrary depth
 - Arrays: Fixed-size arrays
-
-#### Type-Safe Middleware
-
-Create middleware with typed context instead of string HashMap:
-
-```zig
-const AuthData = struct {
-    user_id: []const u8 = "",
-    username: []const u8 = "",
-    role: enum { admin, user, guest } = .guest,
-    authenticated: bool = false,
-};
-
-fn authMiddleware(ctx: *cli.TypedMiddleware(AuthData)) !bool {
-    // Type-safe field access with compile-time validation
-    ctx.set(.user_id, "12345");
-    ctx.set(.username, "john_doe");
-    ctx.set(.role, .admin);           // Enum - compile-time checked!
-    ctx.set(.authenticated, true);
-
-    // Access with type safety
-    if (ctx.get(.role) == .admin) {
-        std.debug.print("Admin access granted\n", .{});
-    }
-
-    return true;
-}
-
-// Use in middleware chain
-var chain = cli.TypedMiddlewareChain(AuthData).init(allocator);
-defer chain.deinit();
-
-try chain.useTyped(authMiddleware, "auth");
-```
-
-#### Runtime vs Typed API Comparison
-
-```zig
-// Runtime API (string-based)
-const value = ctx.getOption("name");  // Returns ?[]const u8
-if (value) |v| {
-    const age_str = ctx.getOption("age") orelse "0";
-    const age = try std.fmt.parseInt(u16, age_str, 10);
-}
-
-// Typed API (compile-time validated)
-const name = ctx.get(.name);  // Returns []const u8 directly
-const age = ctx.get(.age);    // Returns u16, already parsed
-//              ^^^^^ Compile-time validated enum field!
-```
-
-See `examples/typed.zig` for a complete working example.
 
 ### Prompts
 
@@ -491,7 +472,7 @@ defer allocator.free(selected);
 #### MultiSelect Prompt
 
 ```zig
-const choices = [_]prompt.SelectPrompt.Choice{
+const choices = [_]prompt.MultiSelectPrompt.Choice{
     .{ .label = "Option 1", .value = "opt1" },
     .{ .label = "Option 2", .value = "opt2" },
 };
@@ -526,7 +507,7 @@ var spinner = prompt.SpinnerPrompt.init(allocator, "Loading data...");
 try spinner.start();
 
 // Do some work
-std.time.sleep(2 * std.time.ns_per_s);
+_ = std.c.nanosleep(&.{ .sec = 2, .nsec = 0 }, null);
 
 try spinner.stop("Data loaded successfully!");
 ```
@@ -643,7 +624,7 @@ try progress.start();
 
 for (0..100) |i| {
     // Do some work
-    std.time.sleep(50 * std.time.ns_per_ms);
+    _ = std.c.nanosleep(&.{ .sec = 0, .nsec = 50 * std.time.ns_per_ms }, null);
     try progress.update(i + 1);
 }
 
@@ -651,10 +632,10 @@ try progress.finish();
 ```
 
 Progress bar styles:
-- `.bar` - Classic progress bar (█████░░░░░)
-- `.blocks` - Block characters (▓▓▓▓▓░░░░░)
-- `.dots` - Dots (⣿⣿⣿⣿⣿⡀⡀⡀⡀⡀)
-- `.ascii` - ASCII fallback ([====------])
+- `.bar` - Classic progress bar
+- `.blocks` - Block characters
+- `.dots` - Dots
+- `.ascii` - ASCII fallback
 
 #### Table Rendering
 
@@ -733,29 +714,27 @@ defer config3.deinit();
 // In: ., ./.config, ~/.config/myapp
 ```
 
-#### Reading Values
+#### Untyped Config Access
+
+For simple cases, use the raw `Config` type:
 
 ```zig
+var raw_config = cli.config.Config.init(allocator);
+defer raw_config.deinit();
+
+try raw_config.loadFromFile("config.toml", .auto);
+
 // Get typed values
-if (config.getString("name")) |name| {
+if (raw_config.getString("name")) |name| {
     std.debug.print("Name: {s}\n", .{name});
 }
 
-if (config.getInt("port")) |port| {
+if (raw_config.getInt("port")) |port| {
     std.debug.print("Port: {d}\n", .{port});
 }
 
-if (config.getBool("debug")) |debug| {
+if (raw_config.getBool("debug")) |debug| {
     std.debug.print("Debug: {}\n", .{debug});
-}
-
-if (config.getFloat("timeout")) |timeout| {
-    std.debug.print("Timeout: {d}s\n", .{timeout});
-}
-
-// Get raw value for complex types
-if (config.get("database")) |db_value| {
-    // Handle nested tables, arrays, etc.
 }
 ```
 
@@ -825,29 +804,37 @@ std.debug.print("{s} Loading...\n", .{symbols.spinner[0]});
 
 Check out the `examples/` directory for complete examples:
 
+- `simple.zig` - Minimal typed CLI example
 - `basic.zig` - Basic CLI with options and subcommands
-- `prompts.zig` - All prompt types with validation
+- `typed.zig` - Type-safe API examples (compile-time validated)
 - `advanced.zig` - Complex CLI with multiple commands and arguments
-- `showcase.zig` - Comprehensive feature demonstration including all new prompts
+- `prompts.zig` - All prompt types with validation
+- `showcase.zig` - Comprehensive feature demonstration
 - `config.zig` - Configuration file examples (TOML, JSONC, JSON5)
-- **`typed.zig`** - Type-safe API examples (compile-time validated) (NEW!)
 
 Example config files are in `examples/configs/`:
 - `example.toml` - TOML format example
 - `example.jsonc` - JSONC format example
 - `example.json5` - JSON5 format example
 
-Run examples with your own Zig project by importing zig-cli.
+Build and run examples:
+
+```bash
+zig build examples          # Build all examples
+zig build run-simple        # Run a specific example
+zig build run-showcase      # Run the showcase
+```
 
 ## Architecture
 
 ### CLI Framework
 ```
-CLI
-├── Command (root)
+Command(T) (typed, compile-time validated)
+├── BaseCommand (underlying command)
 │   ├── Options (parsed from --flags)
 │   ├── Arguments (positional)
 │   └── Subcommands (nested)
+├── Context(T) (typed parse context)
 └── Parser (validation pipeline)
 ```
 
@@ -858,7 +845,7 @@ PromptCore (state machine)
 │   ├── Raw mode handling
 │   ├── Keyboard input
 │   └── ANSI output
-├── State: initial → active ↔ error → submit/cancel
+├── State: initial -> active <-> error -> submit/cancel
 └── Events: value, cursor, key, submit, cancel
 ```
 
@@ -877,26 +864,26 @@ zig-cli is inspired by the TypeScript library clapp, bringing similar developer 
 
 | Feature | clapp | zig-cli |
 |---------|-------|---------|
-| Builder Pattern | ✅ | ✅ |
-| Subcommands | ✅ | ✅ |
-| Command Aliases | ✅ | ✅ |
-| Interactive Prompts | ✅ | ✅ |
-| State Machine | ✅ | ✅ |
-| Type Validation | ✅ | ✅ |
-| ANSI Colors | ✅ | ✅ |
-| Style Chaining | ✅ | ✅ |
-| Spinner/Loading | ✅ | ✅ |
-| Progress Bars | ✅ | ✅ |
-| Box Rendering | ✅ | ✅ |
-| Table Rendering | ✅ | ✅ |
-| Message Prompts | ✅ | ✅ |
-| Number Prompts | ✅ | ✅ |
-| Path Prompts | ✅ | ✅ |
-| Group Prompts | ✅ | ✅ |
-| Terminal Detection | ✅ | ✅ |
-| Dimension Detection | ✅ | ✅ |
-| Config Files (TOML/JSONC/JSON5) | ✅ | ✅ |
-| Middleware System | ✅ | ✅ |
+| Builder Pattern | yes | yes |
+| Subcommands | yes | yes |
+| Command Aliases | yes | yes |
+| Interactive Prompts | yes | yes |
+| State Machine | yes | yes |
+| Type Validation | yes | yes |
+| ANSI Colors | yes | yes |
+| Style Chaining | yes | yes |
+| Spinner/Loading | yes | yes |
+| Progress Bars | yes | yes |
+| Box Rendering | yes | yes |
+| Table Rendering | yes | yes |
+| Message Prompts | yes | yes |
+| Number Prompts | yes | yes |
+| Path Prompts | yes | yes |
+| Group Prompts | yes | yes |
+| Terminal Detection | yes | yes |
+| Dimension Detection | yes | yes |
+| Config Files (TOML/JSONC/JSON5) | yes | yes |
+| Middleware System | yes | yes |
 | Language | TypeScript | Zig |
 | Binary Size | ~50MB (with Node.js) | ~500KB |
 | Startup Time | ~50-100ms | <1ms |
@@ -905,6 +892,14 @@ zig-cli is inspired by the TypeScript library clapp, bringing similar developer 
 
 ```bash
 zig build test
+```
+
+## Building
+
+```bash
+zig build              # Build the library
+zig build test         # Run all tests
+zig build examples     # Build all examples
 ```
 
 ## License
@@ -917,7 +912,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Roadmap
 
-### Completed Features ✅
+### Completed Features
 - [x] Spinner/loading indicators
 - [x] Box/panel rendering
 - [x] Message prompts (intro, outro, note, log, cancel)
@@ -932,7 +927,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [x] Number prompt with range validation
 - [x] Path prompt with autocomplete
 - [x] Middleware system for commands
-- [x] **Type-safe API** with compile-time validation (NEW!)
+- [x] Type-safe API with compile-time validation
   - [x] TypedCommand with auto-generated options from structs
   - [x] TypedConfig with schema validation
   - [x] TypedMiddleware with compile-time field checking

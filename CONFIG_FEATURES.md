@@ -2,7 +2,7 @@
 
 ## Overview
 
-zig-cli now includes a powerful configuration system supporting three popular formats:
+zig-cli includes a powerful configuration system supporting three popular formats:
 - **TOML** - Simple, readable configuration format
 - **JSONC** - JSON with Comments (also handles standard JSON)
 - **JSON5** - JSON with extended syntax (more JavaScript-like)
@@ -34,12 +34,38 @@ Each format has its own strengths:
 - Special values: `Infinity`, `-Infinity`, `NaN`
 - Multi-line strings
 
-### 2. Auto-discovery
+### 2. Type-Safe Config Loading (Recommended)
+
+Define your config schema as a Zig struct and get compile-time validation:
+
+```zig
+const AppConfig = struct {
+    database: struct {
+        host: []const u8,
+        port: u16,
+    },
+    log_level: enum { debug, info, warn, @"error" } = .info,
+    debug: bool = false,
+};
+
+// Load with full type checking
+var config = try cli.config.load(AppConfig, allocator, "config.toml");
+defer config.deinit();
+
+// Direct field access - type-safe!
+std.debug.print("DB: {s}:{d}\n", .{
+    config.value.database.host,
+    config.value.database.port,
+});
+```
+
+### 3. Auto-discovery
 
 The config system can automatically discover configuration files:
 
 ```zig
-var config = try cli.config.discover(allocator, "myapp");
+var config = try cli.config.discover(AppConfig, allocator, "myapp");
+defer config.deinit();
 ```
 
 Search locations (in order):
@@ -49,20 +75,27 @@ Search locations (in order):
 
 First found file is loaded.
 
-### 3. Type-safe Access
+### 4. Untyped Access
+
+For cases where you don't have a schema, use the raw `Config` type:
 
 ```zig
+var raw_config = cli.config.Config.init(allocator);
+defer raw_config.deinit();
+
+try raw_config.loadFromFile("config.toml", .auto);
+
 // Typed getters with optional returns
-const name = config.getString("name");        // ?[]const u8
-const port = config.getInt("port");           // ?i64
-const debug = config.getBool("debug");        // ?bool
-const timeout = config.getFloat("timeout");   // ?f64
+const name = raw_config.getString("name");        // ?[]const u8
+const port = raw_config.getInt("port");           // ?i64
+const debug = raw_config.getBool("debug");        // ?bool
+const timeout = raw_config.getFloat("timeout");   // ?f64
 
 // Raw value access for complex types
-const value = config.get("database");         // ?*Value
+const value = raw_config.get("database");         // ?*Value
 ```
 
-### 4. Nested Configuration
+### 5. Nested Configuration
 
 All formats support nested structures:
 
@@ -89,23 +122,23 @@ timeout = 30
 }
 ```
 
-### 5. Format Auto-detection
+### 6. Format Auto-detection
 
 Auto-detect based on file extension:
 
 ```zig
-try config.loadFromFile("config.toml", .auto);  // Detects TOML
-try config.loadFromFile("config.json5", .auto); // Detects JSON5
-try config.loadFromFile("config.jsonc", .auto); // Detects JSONC
-try config.loadFromFile("config.json", .auto);  // Treats as JSONC
+try raw_config.loadFromFile("config.toml", .auto);  // Detects TOML
+try raw_config.loadFromFile("config.json5", .auto); // Detects JSON5
+try raw_config.loadFromFile("config.jsonc", .auto); // Detects JSONC
+try raw_config.loadFromFile("config.json", .auto);  // Treats as JSONC
 ```
 
 Or specify explicitly:
 
 ```zig
-try config.loadFromFile("myfile", .toml);
-try config.loadFromFile("myfile", .jsonc);
-try config.loadFromFile("myfile", .json5);
+try raw_config.loadFromFile("myfile", .toml);
+try raw_config.loadFromFile("myfile", .jsonc);
+try raw_config.loadFromFile("myfile", .json5);
 ```
 
 ## Implementation Details
@@ -152,7 +185,7 @@ pub const Value = union(enum) {
 
 ### Config Manager
 
-The `Config` type provides the high-level API:
+The `Config` type provides the low-level API:
 
 ```zig
 pub const Config = struct {
@@ -176,66 +209,88 @@ pub const Config = struct {
 };
 ```
 
+### Typed Config Loader
+
+The `ConfigLoader` provides the high-level typed API:
+
+```zig
+// These are available via cli.config namespace:
+pub fn load(comptime T: type, allocator, path) !ConfigLoader(T)
+pub fn loadFromString(comptime T: type, allocator, content, format) !ConfigLoader(T)
+pub fn discover(comptime T: type, allocator, app_name) !ConfigLoader(T)
+```
+
 ## Usage Examples
 
-### Basic Usage
+### Basic Typed Usage
 
 ```zig
 const std = @import("std");
 const cli = @import("zig-cli");
+
+const ServerConfig = struct {
+    host: []const u8 = "localhost",
+    port: u16 = 8080,
+    debug: bool = false,
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Load config
-    var config = try cli.config.load(allocator, "config.toml");
+    // Load typed config
+    var config = try cli.config.load(ServerConfig, allocator, "server.toml");
     defer config.deinit();
 
-    // Use config values
-    const port = config.getInt("port") orelse 8080;
-    const host = config.getString("host") orelse "localhost";
-
-    std.debug.print("Server: {s}:{d}\n", .{host, port});
+    std.debug.print("Server: {s}:{d}\n", .{
+        config.value.host,
+        config.value.port,
+    });
 }
 ```
 
 ### With CLI Integration
 
 ```zig
-fn serverAction(ctx: *cli.Command.ParseContext) !void {
+fn serverAction(ctx: *cli.BaseCommand.ParseContext) !void {
     const allocator = ctx.allocator;
 
-    // Load config
-    var config = cli.config.discover(allocator, "myserver") catch |err| {
+    const ServerConfig = struct {
+        host: []const u8 = "localhost",
+        port: u16 = 8080,
+    };
+
+    // Load typed config
+    var config = cli.config.load(ServerConfig, allocator, "server.toml") catch |err| {
         if (err == error.FileNotFound) {
-            // No config file, use defaults
-            std.debug.print("No config found, using defaults\n", .{});
+            std.debug.print("Config not found, using defaults\n", .{});
             return;
         }
         return err;
     };
     defer config.deinit();
 
-    // CLI options override config
+    // CLI options can override config values
     const port = if (ctx.getOption("port")) |p|
         try std.fmt.parseInt(u16, p, 10)
     else
-        @intCast(config.getInt("port") orelse 8080);
+        config.value.port;
 
     std.debug.print("Starting server on port {d}\n", .{port});
 }
 ```
 
-### Config with Nested Values
+### Untyped Config with Nested Values
 
 ```zig
-var config = try cli.config.load(allocator, "config.toml");
-defer config.deinit();
+var raw_config = cli.config.Config.init(allocator);
+defer raw_config.deinit();
+
+try raw_config.loadFromFile("config.toml", .auto);
 
 // Access nested database config
-if (config.get("database")) |db_value| {
+if (raw_config.get("database")) |db_value| {
     if (db_value.* == .table) {
         const db_table = &db_value.table;
 
@@ -249,7 +304,7 @@ if (config.get("database")) |db_value| {
         else
             5432;
 
-        std.debug.print("Database: {s}:{d}\n", .{host, port});
+        std.debug.print("Database: {s}:{d}\n", .{ host, port });
     }
 }
 ```
@@ -262,7 +317,11 @@ See `examples/configs/` for complete examples:
 - `example.jsonc` - JSONC with comments and trailing commas
 - `example.json5` - JSON5 with extended syntax
 
-Run `examples/config.zig` for a live demonstration.
+Build and run the config example:
+
+```bash
+zig build run-config
+```
 
 ## Performance Considerations
 
@@ -289,7 +348,7 @@ pub const ParseError = error{
 Errors are descriptive and can be handled gracefully:
 
 ```zig
-var config = cli.config.load(allocator, "config.toml") catch |err| {
+var config = cli.config.load(MyConfig, allocator, "config.toml") catch |err| {
     switch (err) {
         error.FileNotFound => {
             std.debug.print("Config not found, using defaults\n", .{});
@@ -306,32 +365,19 @@ var config = cli.config.load(allocator, "config.toml") catch |err| {
 
 ## Testing
 
-Test the config system:
-
 ```bash
+# Run all tests including config tests
+zig build test
+
 # Run config example
-zig build-exe examples/config.zig --dep zig-cli --mod zig-cli src/root.zig
-./config
+zig build run-config
 ```
-
-## Future Enhancements
-
-Potential additions:
-- [ ] YAML support
-- [ ] Environment variable expansion
-- [ ] Config validation schemas
-- [ ] Hot-reload support
-- [ ] Config migration tools
-- [ ] Deep merge for complex configs
-- [ ] Dotted path access (`database.host`)
 
 ## Summary
 
-The configuration system adds approximately:
-- **~1,200 lines of code** across 5 files
-- **3 format parsers** with full feature support
-- **Type-safe API** for accessing configuration
+The configuration system provides:
+- **3 format parsers** with full feature support (TOML, JSONC, JSON5)
+- **Type-safe API** via `cli.config.load(T, ...)` for compile-time schema validation
+- **Untyped API** via `cli.config.Config` for dynamic config access
 - **Auto-discovery** for easy setup
 - **Zero runtime dependencies** - pure Zig stdlib
-
-This brings zig-cli to feature parity with popular CLI frameworks while maintaining Zig's philosophy of explicitness and safety.
