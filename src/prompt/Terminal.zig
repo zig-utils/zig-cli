@@ -122,6 +122,15 @@ const TerminalSize = struct {
     height: usize,
 };
 
+/// Manually defined winsize struct for ioctl TIOCGWINSZ.
+/// In Zig 0.16+, std.posix.system.winsize / std.c.winsize is no longer pub.
+const Winsize = extern struct {
+    row: u16,
+    col: u16,
+    xpixel: u16,
+    ypixel: u16,
+};
+
 fn detectTerminalSize() TerminalSize {
     if (builtin.os.tag == .windows) {
         // Windows console API would go here
@@ -130,13 +139,13 @@ fn detectTerminalSize() TerminalSize {
 
     // Try to get terminal size via ioctl
     const stdout = std.Io.File.stdout();
-    var winsize: posix.system.winsize = undefined;
+    var ws: Winsize = undefined;
 
-    const result = posix.system.ioctl(stdout.handle, posix.T.IOCGWINSZ, @intFromPtr(&winsize));
-    if (result == 0 and winsize.col > 0 and winsize.row > 0) {
+    const result = posix.system.ioctl(stdout.handle, posix.T.IOCGWINSZ, @intFromPtr(&ws));
+    if (result == 0 and ws.col > 0 and ws.row > 0) {
         return .{
-            .width = winsize.col,
-            .height = winsize.row,
+            .width = ws.col,
+            .height = ws.row,
         };
     }
 
