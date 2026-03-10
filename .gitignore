@@ -1,6 +1,9 @@
-zig-cache/
+simple
+test_io
+libroot.a
 zig-out/
 .zig-cache/
+zig-cache/
 *.o
 *.so
 *.dylib
