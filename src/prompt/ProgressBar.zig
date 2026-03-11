@@ -5,10 +5,10 @@ const Ansi = @import("Ansi.zig");
 const ProgressBar = @This();
 
 pub const ProgressBarStyle = enum {
-    bar,        // [=====>    ]
-    blocks,     // ████████░░░
-    dots,       // ⣿⣿⣿⣿⣿⣀⣀⣀⣀⣀
-    ascii,      // [###>      ]
+    bar, // [=====>    ]
+    blocks, // ████████░░░
+    dots, // ⣿⣿⣿⣿⣿⣀⣀⣀⣀⣀
+    ascii, // [###>      ]
 };
 
 terminal: Terminal,
