@@ -2,7 +2,7 @@
 
 ## About
 
-CLI tooling built with Zig.
+zig-cli is a type-safe, compile-time validated CLI framework for Zig 0.16+. Define CLI options as structs and get auto-generated flags, compile-time field validation, and full IDE autocomplete with zero runtime overhead. The library includes interactive prompts (text, select, multi-select, password, number, path, confirm, spinner, progress bars), ANSI color/style chaining, table and box rendering, a middleware system for command hooks, and configuration file loading from TOML, JSONC, and JSON5 with type-safe schema validation.
 
 ## Linting
 
