@@ -1,5 +1,5 @@
 const std = @import("std");
-const cli = @import("zig-cli");
+const cli = @import("zig_cli");
 
 // Define your CLI options as a struct - that's it!
 const GreetOptions = struct {

@@ -1,5 +1,5 @@
 .{
-    .name = .@"zig-cli",
+    .name = .zig_cli,
     .version = "0.1.1",
     .minimum_zig_version = "0.14.0",
     .paths = .{

@@ -1,5 +1,5 @@
 const std = @import("std");
-const cli = @import("zig-cli");
+const cli = @import("zig_cli");
 const prompt = cli.prompt;
 
 pub fn main() !void {

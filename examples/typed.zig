@@ -1,5 +1,5 @@
 const std = @import("std");
-const cli = @import("zig-cli");
+const cli = @import("zig_cli");
 
 // ============================================================================
 // Example 1: Type-Safe Command with Compile-Time Validation

@@ -1,5 +1,5 @@
 const std = @import("std");
-const cli = @import("zig-cli");
+const cli = @import("zig_cli");
 
 fn greetAction(ctx: *cli.BaseCommand.ParseContext) !void {
     const name = ctx.getOption("name") orelse "World";

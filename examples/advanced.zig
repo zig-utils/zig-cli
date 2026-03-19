@@ -1,5 +1,5 @@
 const std = @import("std");
-const cli = @import("zig-cli");
+const cli = @import("zig_cli");
 
 fn createAction(ctx: *cli.BaseCommand.ParseContext) !void {
     var buf: [4096]u8 = undefined;

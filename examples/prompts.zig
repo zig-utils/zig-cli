@@ -1,5 +1,5 @@
 const std = @import("std");
-const prompt = @import("zig-cli").prompt;
+const prompt = @import("zig_cli").prompt;
 
 fn getIo() std.Io {
     return std.Options.debug_io;

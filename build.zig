@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // ── Library module (public, exposable to dependents) ────────────────
-    const zig_cli = b.addModule("zig-cli", .{
+    const zig_cli = b.addModule("zig_cli", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
@@ -46,7 +46,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "zig-cli", .module = zig_cli },
+                .{ .name = "zig_cli", .module = zig_cli },
             },
         });
 
