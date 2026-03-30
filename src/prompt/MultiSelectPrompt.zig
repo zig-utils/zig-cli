@@ -18,7 +18,7 @@ selected_index: usize,
 checked: std.ArrayList(bool),
 
 pub fn init(allocator: std.mem.Allocator, message: []const u8, choices: []const Choice) !MultiSelectPrompt {
-    var checked = std.ArrayList(bool){};
+    var checked = std.ArrayList(bool).empty;
     try checked.appendNTimes(allocator, false, choices.len);
 
     return .{
@@ -64,7 +64,7 @@ pub fn prompt(self: *MultiSelectPrompt) ![][]const u8 {
     }
 
     // Collect checked values
-    var result = std.ArrayList([]const u8){};
+    var result = std.ArrayList([]const u8).empty;
     for (self.choices, 0..) |choice, i| {
         if (self.checked.items[i]) {
             const value_copy = try self.core.allocator.dupe(u8, choice.value);

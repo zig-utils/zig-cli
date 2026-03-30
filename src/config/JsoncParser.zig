@@ -152,7 +152,7 @@ fn parseObject(self: *JsoncParser) !Value {
 
 fn parseArray(self: *JsoncParser) !Value {
     self.pos += 1; // Skip '['
-    var items = std.ArrayList(Value){};
+    var items = std.ArrayList(Value).empty;
     errdefer {
         for (items.items) |*item| {
             item.deinit(self.allocator);
@@ -202,7 +202,7 @@ fn parseArray(self: *JsoncParser) !Value {
 fn parseString(self: *JsoncParser) !Value {
     self.pos += 1; // Skip opening '"'
 
-    var str = std.ArrayList(u8){};
+    var str = std.ArrayList(u8).empty;
     errdefer str.deinit(self.allocator);
 
     while (self.pos < self.source.len) {

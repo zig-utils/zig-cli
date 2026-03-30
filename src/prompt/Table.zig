@@ -37,7 +37,7 @@ pub fn init(allocator: std.mem.Allocator, columns: []const Column) Table {
         .allocator = allocator,
         .terminal = terminal,
         .columns = columns,
-        .rows = std.ArrayList([]const []const u8){},
+        .rows = std.ArrayList([]const []const u8).empty,
         .style = if (terminal.supports_unicode) .rounded else .simple,
         .show_header = true,
     };

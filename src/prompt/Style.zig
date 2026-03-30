@@ -174,7 +174,7 @@ pub const Style = struct {
         }
 
         // Build ANSI code sequence
-        var codes: std.ArrayList(u8) = .{};
+        var codes: std.ArrayList(u8) = .empty;
         defer codes.deinit(self.allocator);
 
         var first = true;

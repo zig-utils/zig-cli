@@ -185,7 +185,7 @@ fn parseString(self: *TomlParser) !Value {
 
 fn parseArray(self: *TomlParser) !Value {
     self.pos += 1; // Skip '['
-    var items = std.ArrayList(Value){};
+    var items = std.ArrayList(Value).empty;
     errdefer {
         for (items.items) |*item| {
             item.deinit(self.allocator);

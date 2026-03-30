@@ -185,7 +185,7 @@ fn parseKey(self: *Json5Parser) ![]const u8 {
 
 fn parseArray(self: *Json5Parser) !Value {
     self.pos += 1; // Skip '['
-    var items = std.ArrayList(Value){};
+    var items = std.ArrayList(Value).empty;
     errdefer {
         for (items.items) |*item| {
             item.deinit(self.allocator);
@@ -236,7 +236,7 @@ fn parseString(self: *Json5Parser) !Value {
     const quote = self.source[self.pos];
     self.pos += 1; // Skip opening quote
 
-    var str = std.ArrayList(u8){};
+    var str = std.ArrayList(u8).empty;
     errdefer str.deinit(self.allocator);
 
     while (self.pos < self.source.len) {

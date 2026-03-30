@@ -16,7 +16,7 @@ pub const ParseContext = struct {
         return .{
             .allocator = allocator,
             .options = std.StringHashMap([]const u8).init(allocator),
-            .arguments = std.ArrayList([]const u8){},
+            .arguments = std.ArrayList([]const u8).empty,
             .command_name = command_name,
         };
     }
@@ -58,10 +58,10 @@ pub fn init(allocator: std.mem.Allocator, name: []const u8, description: []const
     cmd.* = .{
         .name = name,
         .description = description,
-        .aliases = std.ArrayList([]const u8){},
-        .options = std.ArrayList(Option){},
-        .arguments = std.ArrayList(Argument){},
-        .subcommands = std.ArrayList(*Command){},
+        .aliases = std.ArrayList([]const u8).empty,
+        .options = std.ArrayList(Option).empty,
+        .arguments = std.ArrayList(Argument).empty,
+        .subcommands = std.ArrayList(*Command).empty,
         .allocator = allocator,
     };
     return cmd;

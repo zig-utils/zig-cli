@@ -163,7 +163,7 @@ pub const Box = struct {
     }
 
     fn splitLines(self: *Box, content: []const u8) ![][]const u8 {
-        var list = std.ArrayList([]const u8){};
+        var list = std.ArrayList([]const u8).empty;
         errdefer list.deinit(self.allocator);
 
         var iter = std.mem.splitScalar(u8, content, '\n');
