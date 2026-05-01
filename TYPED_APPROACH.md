@@ -6,7 +6,7 @@
 
 There are no duplicate APIs, no "typed vs untyped" choices. Just one way to do things - the type-safe way.
 
-## Why Typed-Only?
+## Why Typed-Only
 
 ### 1. **Compile-Time Safety**
 
@@ -22,6 +22,7 @@ const name = ctx.getOption("nmae"); // Typo only caught when code runs
 ### 2. **Zero Runtime Cost**
 
 All type validation happens at compile time using Zig's `comptime` features:
+
 - No reflection
 - No runtime type checking
 - No performance overhead
@@ -71,6 +72,7 @@ _ = cmd.setAction(myAction);
 ```
 
 **What happens:**
+
 1. `cli.command(Options)` - Returns `TypedCommand(Options)` type
 2. Struct introspection at comptime generates CLI options
 3. Field types → Option types (string, int, bool, enum)
@@ -90,6 +92,7 @@ fn myAction(ctx: *cli.Context(Options)) !void {
 ```
 
 **Type safety:**
+
 - `.name` is an enum value checked at compile time
 - Return type inferred from struct field type
 - No optionals for required fields
@@ -114,6 +117,7 @@ const port = config.value.database.port;  // u16
 ```
 
 **Benefits:**
+
 - Schema validation at load time
 - Type conversion automatic
 - Enum values checked
@@ -142,6 +146,7 @@ fn authMiddleware(ctx: *cli.middleware(AuthData)) !bool {
 ## No String-Based Lookups
 
 Traditional CLI libraries:
+
 ```zig
 // ❌ String-based (error-prone)
 const name = ctx.getOption("name");
@@ -150,6 +155,7 @@ const port = try std.fmt.parseInt(u16, port_str, 10);
 ```
 
 zig-cli:
+
 ```zig
 // ✅ Type-safe (compile-time validated)
 const name = ctx.get(.name);
@@ -169,6 +175,7 @@ No "advanced vs simple" APIs. No "typed vs untyped" paths. Just one elegant, typ
 ### How It Works
 
 1. **Struct Introspection**:
+
    ```zig
    const fields = @typeInfo(T).Struct.fields;
    inline for (fields) |field| {
@@ -185,6 +192,7 @@ No "advanced vs simple" APIs. No "typed vs untyped" paths. Just one elegant, typ
    - `?T` → Optional option
 
 3. **Accessor Generation**:
+
    ```zig
    pub fn get(self: *Self, comptime field: std.meta.FieldEnum(T)) FieldType(T, field) {
        comptime {
@@ -211,21 +219,25 @@ No "advanced vs simple" APIs. No "typed vs untyped" paths. Just one elegant, typ
 ## Supported Types
 
 ### Primitives
+
 - ✅ `bool`
 - ✅ `i8`, `i16`, `i32`, `i64`, `i128`
 - ✅ `u8`, `u16`, `u32`, `u64`, `u128`
 - ✅ `f32`, `f64`
 
 ### Strings
+
 - ✅ `[]const u8`
 
 ### Complex Types
+
 - ✅ Enums (any Zig enum)
 - ✅ Optionals (`?T`)
 - ✅ Nested structs (arbitrary depth)
 - ✅ Fixed arrays (`[N]T`)
 
 ### Not Supported
+
 - ❌ Slices of non-u8 (`[]T` where T != u8)
 - ❌ Dynamic arrays (`ArrayList`)
 - ❌ Hashmaps
@@ -243,7 +255,7 @@ const Options = struct {
     verbose: bool = false,
 };
 
-fn process(ctx: *cli.Context(Options)) !void {
+fn process(ctx: _cli.Context(Options)) !void {
     const opts = try ctx.parse();
     std.debug.print("Processing {s} -> {s}\n", .{opts.input, opts.output});
 }
@@ -282,8 +294,9 @@ const Config = struct {
 If you have string-based CLI code:
 
 ### Before
+
 ```zig
-fn action(ctx: *Command.ParseContext) !void {
+fn action(ctx: _Command.ParseContext) !void {
     const name = ctx.getOption("name") orelse return error.Missing;
     const port_str = ctx.getOption("port") orelse "8080";
     const port = try std.fmt.parseInt(u16, port_str, 10);
@@ -291,6 +304,7 @@ fn action(ctx: *Command.ParseContext) !void {
 ```
 
 ### After
+
 ```zig
 const Options = struct {
     name: []const u8,

@@ -3,6 +3,7 @@
 ## Overview
 
 zig-cli includes a powerful configuration system supporting three popular formats:
+
 - **TOML** - Simple, readable configuration format
 - **JSONC** - JSON with Comments (also handles standard JSON)
 - **JSON5** - JSON with extended syntax (more JavaScript-like)
@@ -14,18 +15,21 @@ zig-cli includes a powerful configuration system supporting three popular format
 Each format has its own strengths:
 
 **TOML:**
+
 - Simple, INI-like syntax
 - Great for human editing
 - Native support for nested tables
 - Comments with `#`
 
 **JSONC:**
+
 - JSON with `//` and `/* */` comments
 - Trailing commas allowed
 - Familiar to JavaScript developers
 - Works with standard JSON files too
 
 **JSON5:**
+
 - Unquoted object keys
 - Single and double quotes for strings
 - Trailing commas
@@ -44,7 +48,7 @@ const AppConfig = struct {
         host: []const u8,
         port: u16,
     },
-    log_level: enum { debug, info, warn, @"error" } = .info,
+    log*level: enum { debug, info, warn, @"error" } = .info,
     debug: bool = false,
 };
 
@@ -69,6 +73,7 @@ defer config.deinit();
 ```
 
 Search locations (in order):
+
 1. `./myapp.{toml,json5,jsonc,json}`
 2. `./.config/myapp.{toml,json5,jsonc,json}`
 3. `~/.config/myapp/myapp.{toml,json5,jsonc,json}`
@@ -80,19 +85,19 @@ First found file is loaded.
 For cases where you don't have a schema, use the raw `Config` type:
 
 ```zig
-var raw_config = cli.config.Config.init(allocator);
-defer raw_config.deinit();
+var raw*config = cli.config.Config.init(allocator);
+defer raw*config.deinit();
 
-try raw_config.loadFromFile("config.toml", .auto);
+try raw*config.loadFromFile("config.toml", .auto);
 
 // Typed getters with optional returns
-const name = raw_config.getString("name");        // ?[]const u8
-const port = raw_config.getInt("port");           // ?i64
-const debug = raw_config.getBool("debug");        // ?bool
-const timeout = raw_config.getFloat("timeout");   // ?f64
+const name = raw*config.getString("name");        // ?[]const u8
+const port = raw*config.getInt("port");           // ?i64
+const debug = raw*config.getBool("debug");        // ?bool
+const timeout = raw*config.getFloat("timeout");   // ?f64
 
 // Raw value access for complex types
-const value = raw_config.get("database");         // ?*Value
+const value = raw*config.get("database");         // ?*Value
 ```
 
 ### 5. Nested Configuration
@@ -127,18 +132,18 @@ timeout = 30
 Auto-detect based on file extension:
 
 ```zig
-try raw_config.loadFromFile("config.toml", .auto);  // Detects TOML
-try raw_config.loadFromFile("config.json5", .auto); // Detects JSON5
-try raw_config.loadFromFile("config.jsonc", .auto); // Detects JSONC
-try raw_config.loadFromFile("config.json", .auto);  // Treats as JSONC
+try raw*config.loadFromFile("config.toml", .auto);  // Detects TOML
+try raw*config.loadFromFile("config.json5", .auto); // Detects JSON5
+try raw*config.loadFromFile("config.jsonc", .auto); // Detects JSONC
+try raw*config.loadFromFile("config.json", .auto);  // Treats as JSONC
 ```
 
 Or specify explicitly:
 
 ```zig
-try raw_config.loadFromFile("myfile", .toml);
-try raw_config.loadFromFile("myfile", .jsonc);
-try raw_config.loadFromFile("myfile", .json5);
+try raw*config.loadFromFile("myfile", .toml);
+try raw*config.loadFromFile("myfile", .jsonc);
+try raw*config.loadFromFile("myfile", .json5);
 ```
 
 ## Implementation Details
@@ -173,7 +178,7 @@ Unified `Value` type across all formats:
 
 ```zig
 pub const Value = union(enum) {
-    null_value: void,
+    null*value: void,
     boolean: bool,
     integer: i64,
     float: f64,
@@ -195,7 +200,7 @@ pub const Config = struct {
     // Loading
     pub fn loadFromFile(path, format) !void
     pub fn loadFromString(content, format) !void
-    pub fn discover(allocator, app_name) !Config
+    pub fn discover(allocator, app*name) !Config
 
     // Accessing
     pub fn get(key) ?*Value
@@ -217,7 +222,7 @@ The `ConfigLoader` provides the high-level typed API:
 // These are available via cli.config namespace:
 pub fn load(comptime T: type, allocator, path) !ConfigLoader(T)
 pub fn loadFromString(comptime T: type, allocator, content, format) !ConfigLoader(T)
-pub fn discover(comptime T: type, allocator, app_name) !ConfigLoader(T)
+pub fn discover(comptime T: type, allocator, app*name) !ConfigLoader(T)
 ```
 
 ## Usage Examples
@@ -236,7 +241,7 @@ const ServerConfig = struct {
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
+    defer * = gpa.deinit();
     const allocator = gpa.allocator();
 
     // Load typed config
@@ -284,22 +289,22 @@ fn serverAction(ctx: *cli.BaseCommand.ParseContext) !void {
 ### Untyped Config with Nested Values
 
 ```zig
-var raw_config = cli.config.Config.init(allocator);
-defer raw_config.deinit();
+var raw*config = cli.config.Config.init(allocator);
+defer raw*config.deinit();
 
-try raw_config.loadFromFile("config.toml", .auto);
+try raw*config.loadFromFile("config.toml", .auto);
 
 // Access nested database config
-if (raw_config.get("database")) |db_value| {
-    if (db_value.* == .table) {
-        const db_table = &db_value.table;
+if (raw*config.get("database")) |db*value| {
+    if (db*value.* == .table) {
+        const db*table = &db*value.table;
 
-        const host = if (db_table.get("host")) |h|
+        const host = if (db*table.get("host")) |h|
             if (h == .string) h.string else "localhost"
         else
             "localhost";
 
-        const port = if (db_table.get("port")) |p|
+        const port = if (db*table.get("port")) |p|
             if (p == .integer) p.integer else 5432
         else
             5432;
@@ -376,6 +381,7 @@ zig build run-config
 ## Summary
 
 The configuration system provides:
+
 - **3 format parsers** with full feature support (TOML, JSONC, JSON5)
 - **Type-safe API** via `cli.config.load(T, ...)` for compile-time schema validation
 - **Untyped API** via `cli.config.Config` for dynamic config access

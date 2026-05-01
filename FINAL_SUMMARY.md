@@ -19,6 +19,7 @@ A **comprehensive CLI library for Zig 0.16+** with extensive feature parity to p
 ### 1. CLI Framework (100% Complete)
 
 **Core:**
+
 - Fluent Builder API
 - Command routing with nested subcommands
 - Command aliases
@@ -30,6 +31,7 @@ A **comprehensive CLI library for Zig 0.16+** with extensive feature parity to p
 - Middleware system (pre/post hooks, built-in: logging, timing, validation)
 
 **Type-Safe Layer:**
+
 - `cli.Command(T)` - auto-generates options from struct fields
 - `cli.Context(T)` - compile-time validated field access
 - `cli.Action(T)` - typed action function signatures
@@ -37,6 +39,7 @@ A **comprehensive CLI library for Zig 0.16+** with extensive feature parity to p
 ### 2. Interactive Prompts (10 Types)
 
 **Basic:**
+
 - TextPrompt - with validation & placeholders
 - ConfirmPrompt - Yes/No
 - SelectPrompt - Single choice
@@ -45,11 +48,13 @@ A **comprehensive CLI library for Zig 0.16+** with extensive feature parity to p
 - NumberPrompt - Integer/Float with min/max
 
 **Advanced:**
+
 - SpinnerPrompt - Animated loading
 - PathPrompt - File/directory with Tab autocomplete
 - GroupPrompt - Sequential prompts with shared state
 
 **UI/Messages:**
+
 - Message prompts (intro, outro, note, log, cancel)
 - ProgressBar - 4 styles, percentage, count
 - Box rendering - 4 border styles
@@ -58,6 +63,7 @@ A **comprehensive CLI library for Zig 0.16+** with extensive feature parity to p
 ### 3. Styling & Terminal
 
 **Styling:**
+
 - ANSI colors (16 colors)
 - Text styles (bold, dim, italic, underline)
 - Style chaining - `style(text).red().bold().underline()`
@@ -66,6 +72,7 @@ A **comprehensive CLI library for Zig 0.16+** with extensive feature parity to p
 - Symbols library
 
 **Terminal:**
+
 - Raw mode handling
 - Cursor control (hide/show, save/restore)
 - Dimension detection (width/height)
@@ -76,11 +83,13 @@ A **comprehensive CLI library for Zig 0.16+** with extensive feature parity to p
 ### 4. Configuration System (100% Complete)
 
 **Formats:**
+
 - TOML parser
 - JSONC parser (JSON with comments)
 - JSON5 parser (extended JSON)
 
 **Features:**
+
 - Type-safe loading via `cli.config.load(T, ...)`
 - Auto-discovery of config files
 - Untyped access via `cli.config.Config`
@@ -170,7 +179,7 @@ const GreetOptions = struct {
     verbose: bool = false,
 };
 
-fn greet(ctx: *cli.Context(GreetOptions)) !void {
+fn greet(ctx: _cli.Context(GreetOptions)) !void {
     const name = ctx.get(.name);  // Compile-time validated!
     std.debug.print("Hello, {s}!\n", .{name});
 }
@@ -233,7 +242,7 @@ var progress = prompt.ProgressBar.init(allocator, 100, "Processing");
 try progress.start();
 
 for (0..100) |i| {
-    _ = std.c.nanosleep(&.{ .sec = 0, .nsec = 50 * std.time.ns_per_ms }, null);
+    _ = std.c.nanosleep(&.{ .sec = 0, .nsec = 50 _ std.time.ns_per_ms }, null);
     try progress.update(i + 1);
 }
 
@@ -274,7 +283,7 @@ try table.render();
 | **Terminal** | yes | yes | 90% |
 | **Middleware** | yes | yes | 100% |
 
-**Overall: ~95% feature parity**
+#### Overall: ~95% feature parity
 
 ### What's Still Missing (Low Priority)
 
@@ -321,15 +330,17 @@ zig build run-showcase # Run the showcase
 
 ---
 
-## Why zig-cli?
+## Why zig-cli
 
 ### vs TypeScript/JavaScript CLIs
+
 - **10-100x smaller binaries**
 - **Instant startup** (no Node.js runtime)
 - **Type safety** at compile time
 - **No dependencies** to manage
 
 ### vs Other Zig CLI libs
+
 - **Most feature-complete**
 - **Interactive prompts included**
 - **Configuration support built-in**

@@ -5,6 +5,7 @@ This document tracks the feature parity between zig-cli and the clapp TypeScript
 ## Implemented Features
 
 ### CLI Framework
+
 - [x] **Fluent Builder API** - Chainable methods for intuitive CLI construction
 - [x] **Command System** - Full command routing with nested subcommands
 - [x] **Command Aliases** - Support for command shortcuts (e.g., `build`, `b`)
@@ -18,6 +19,7 @@ This document tracks the feature parity between zig-cli and the clapp TypeScript
 - [x] **Type-Safe Commands** - `cli.Command(T)` with compile-time validated struct-based options
 
 ### Interactive Prompts
+
 - [x] **TextPrompt** - Text input with placeholder and validation
 - [x] **ConfirmPrompt** - Yes/No confirmation
 - [x] **SelectPrompt** - Single selection from list
@@ -30,6 +32,7 @@ This document tracks the feature parity between zig-cli and the clapp TypeScript
 - [x] **Message Prompts** - intro, outro, note, log, cancel
 
 ### Terminal & UI
+
 - [x] **Terminal Detection** - Unicode/ASCII support detection
 - [x] **Color Support** - ANSI colors with NO_COLOR respect
 - [x] **Dimension Detection** - Terminal width/height via ioctl
@@ -43,11 +46,13 @@ This document tracks the feature parity between zig-cli and the clapp TypeScript
 - [x] **Keyboard Events** - Full keyboard handling (arrows, enter, backspace, etc.)
 
 ### State Management
+
 - [x] **State Machine** - 5-state system (initial -> active <-> error -> submit/cancel)
 - [x] **Event System** - Event types for value, cursor, key, submit, cancel
 - [x] **State Transitions** - Validated state transitions
 
 ### Configuration
+
 - [x] **TOML Parser** - Full TOML format support
 - [x] **JSONC Parser** - JSON with comments
 - [x] **JSON5 Parser** - Extended JSON syntax
@@ -56,6 +61,7 @@ This document tracks the feature parity between zig-cli and the clapp TypeScript
 - [x] **Format Auto-detection** - Based on file extension
 
 ### Architecture
+
 - [x] **Memory Safety** - Explicit allocators, proper cleanup
 - [x] **Error Handling** - Zig error unions throughout
 - [x] **Cross-platform** - macOS, Linux support (Windows partial)
@@ -64,6 +70,7 @@ This document tracks the feature parity between zig-cli and the clapp TypeScript
 ## Partially Implemented
 
 ### Terminal
+
 - [~] **Windows Support** - Basic structure exists, needs full implementation
   - Terminal raw mode placeholder
   - Console API integration needed
@@ -72,6 +79,7 @@ This document tracks the feature parity between zig-cli and the clapp TypeScript
 ## Not Yet Implemented (from clapp)
 
 ### Additional Prompt Types
+
 - [ ] **DatePrompt** - Date/time selection
 - [ ] **AutocompletePrompt** - Text input with suggestions
 - [ ] **GroupMultiselectPrompt** - Grouped multi-selection
@@ -81,26 +89,31 @@ This document tracks the feature parity between zig-cli and the clapp TypeScript
 - [ ] **StreamPrompt** - Streaming output display
 
 ### UI Components
+
 - [ ] **Tree Rendering** - Hierarchical tree display
 
 ### Advanced Features
+
 - [ ] **Theme System** - Customizable color themes
 - [ ] **Lifecycle Hooks** - SIGINT, SIGTERM, error handlers
 - [ ] **Shell Completion** - Generate shell completions
 - [ ] **Async Iterables** - Stream support for async operations
 
 ### Testing Utilities
+
 - [ ] **Mock Prompts** - Testing helpers for prompts
 - [ ] **Output Capture** - Capture and test CLI output
 - [ ] **File System Mocks** - Testing file operations
 
 ### Utilities
+
 - [ ] **Vim Keybindings** - hjkl navigation support
 - [ ] **Markdown Processing** - Render markdown in terminal
 
 ## Feature Completion Stats
 
 ### Core Features (Critical)
+
 - **CLI Framework**: 100%
 - **Basic Prompts**: 100% (text, confirm, select, multiselect, password)
 - **Advanced Prompts**: 100% (number, path, group, spinner)
@@ -109,12 +122,14 @@ This document tracks the feature parity between zig-cli and the clapp TypeScript
 - **Configuration**: 100% (TOML, JSONC, JSON5, typed loader, auto-discovery)
 
 ### Advanced Features
+
 - **Style System**: 95% (colors, chaining, backgrounds - themes missing)
 - **CLI Advanced**: 100% (aliases, middleware, typed commands)
 - **Platform Support**: 80% (Unix fully supported, Windows partial)
 
 ### Overall Completion
-**Estimated: ~95% feature parity**
+
+#### Estimated: ~95% feature parity
 
 All commonly used features are fully implemented. The remaining items (tree rendering, specialized prompt types, shell completion) are lower-priority specialized features.
 

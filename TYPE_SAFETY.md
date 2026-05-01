@@ -9,12 +9,14 @@ zig-cli now includes a **fully type-safe API layer** that leverages Zig's powerf
 ### 1. Compile-Time Validation ✨
 
 **Before (Runtime API):**
+
 ```zig
 const name = ctx.getOption("name");  // Typo in "name" only caught at runtime!
 //                         ^^^^^^ String literal - no compile-time checking
 ```
 
 **After (Typed API):**
+
 ```zig
 const name = ctx.get(.name);  // Typo caught at compile time!
 //                   ^^^^^ Enum field - validated by compiler
@@ -23,6 +25,7 @@ const name = ctx.get(.name);  // Typo caught at compile time!
 ### 2. Zero Runtime Overhead 🚀
 
 The typed API is implemented using Zig's comptime features, which means:
+
 - All type checking happens at compile time
 - No runtime reflection or parsing
 - Same performance as hand-written code
@@ -42,6 +45,7 @@ The typed API is implemented using Zig's comptime features, which means:
 Auto-generate CLI options from a struct definition.
 
 **Example:**
+
 ```zig
 const ServerOptions = struct {
     port: u16 = 8080,
@@ -56,6 +60,7 @@ defer cmd.deinit();
 ```
 
 **What happens under the hood:**
+
 - Struct fields → CLI options automatically
 - Field types → Option types (string, int, float, bool, enum)
 - Optionals (`?T`) → Optional CLI options
@@ -67,6 +72,7 @@ defer cmd.deinit();
 Access parsed options with compile-time validation.
 
 **API:**
+
 ```zig
 fn serverAction(ctx: *cli.TypedContext(ServerOptions)) !void {
     // Individual field access
@@ -82,6 +88,7 @@ fn serverAction(ctx: *cli.TypedContext(ServerOptions)) !void {
 ```
 
 **Type Safety:**
+
 - Field names validated at compile time
 - Types automatically inferred
 - No optionals for required fields
@@ -92,6 +99,7 @@ fn serverAction(ctx: *cli.TypedContext(ServerOptions)) !void {
 Load configuration files with compile-time schema validation.
 
 **Example:**
+
 ```zig
 const AppConfig = struct {
     app_name: []const u8,
@@ -121,6 +129,7 @@ const db_url = try std.fmt.allocPrint(allocator, "{s}:{d}", .{
 ```
 
 **Supported Types:**
+
 - ✅ Primitives: `bool`, `i8`-`i64`, `u8`-`u64`, `f32`, `f64`
 - ✅ Strings: `[]const u8`
 - ✅ Enums: Any Zig enum
@@ -129,6 +138,7 @@ const db_url = try std.fmt.allocPrint(allocator, "{s}:{d}", .{
 - ✅ Fixed arrays: `[N]T`
 
 **Validation:**
+
 - Missing required fields → Compile error
 - Type mismatches → Runtime error with clear message
 - Integer overflow → Checked and reported
@@ -139,6 +149,7 @@ const db_url = try std.fmt.allocPrint(allocator, "{s}:{d}", .{
 Type-safe middleware context with compile-time field validation.
 
 **Example:**
+
 ```zig
 const RequestContext = struct {
     request_id: []const u8 = "",
@@ -172,6 +183,7 @@ try chain.use(someRegularMiddleware);  // Can mix typed and regular
 ```
 
 **Benefits:**
+
 - No string keys → Compile-time field validation
 - No type casting → Direct type access
 - Enum support → Type-safe state management
@@ -189,6 +201,7 @@ try chain.use(someRegularMiddleware);  // Can mix typed and regular
 ### Example: What Gets Generated
 
 **Your code:**
+
 ```zig
 const Opts = struct {
     name: []const u8,
@@ -197,6 +210,7 @@ const Opts = struct {
 ```
 
 **Generated (conceptually):**
+
 ```zig
 // Options auto-created
 Option.init("name", "name", "Auto-generated", .string).withRequired(true);
@@ -218,6 +232,7 @@ fn get(ctx, comptime field) FieldType(Opts, field) {
 ### Runtime → Typed API
 
 **Before:**
+
 ```zig
 fn myAction(ctx: *cli.Command.ParseContext) !void {
     const name_opt = ctx.getOption("name");
@@ -231,6 +246,7 @@ fn myAction(ctx: *cli.Command.ParseContext) !void {
 ```
 
 **After:**
+
 ```zig
 const MyOptions = struct {
     name: []const u8,
@@ -254,6 +270,7 @@ pub fn TypedCommand(comptime T: type) type
 Creates a type-safe command builder from a struct type `T`.
 
 **Methods:**
+
 - `init(allocator, name, description)` - Create typed command
 - `setAction(typed_action)` - Set type-safe action function
 - `getCommand()` - Get underlying Command for parsing
@@ -268,6 +285,7 @@ pub fn TypedContext(comptime T: type) type
 Type-safe context for accessing parsed options.
 
 **Methods:**
+
 - `get(comptime field)` - Get field value with compile-time validation
 - `parse()` - Parse entire struct at once
 
@@ -280,6 +298,7 @@ pub fn TypedConfig(comptime T: type) type
 Type-safe config loader with schema validation.
 
 **Methods:**
+
 - `load(allocator, path)` - Load config from file
 - `loadFromString(allocator, content, format)` - Load from string
 - `discover(allocator, app_name)` - Auto-discover config file
@@ -296,6 +315,7 @@ pub fn TypedMiddleware(comptime T: type) type
 Type-safe middleware context.
 
 **Methods:**
+
 - `init(base_context)` - Create from base context
 - `set(comptime field, value)` - Set field with compile-time validation
 - `get(comptime field)` - Get field value

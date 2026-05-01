@@ -97,6 +97,7 @@ zig-cli/
 ### CLI Framework
 
 1. **Type-Safe Commands (Primary API)**
+
    ```zig
    const GreetOptions = struct {
        name: []const u8,
@@ -113,6 +114,7 @@ zig-cli/
    ```
 
 2. **Low-Level API (BaseCommand)**
+
    ```zig
    const cmd = try cli.BaseCommand.init(allocator, "myapp", "Description");
    _ = try cmd.addOption(cli.Option.init("name", "name", "Your name", .string));
@@ -181,6 +183,7 @@ zig-cli/
 ### Configuration System
 
 1. **Type-Safe Loading**
+
    ```zig
    const MyConfig = struct {
        host: []const u8,
@@ -257,6 +260,7 @@ zig build run-simple   # Run a specific example
 ## Conclusion
 
 zig-cli successfully replicates the core features and developer experience of clapp while leveraging Zig's strengths:
+
 - Memory safety with explicit allocators
 - Compile-time type checking via generics
 - Zero-cost abstractions

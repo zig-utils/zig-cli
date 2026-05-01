@@ -23,6 +23,7 @@ Inspired by modern CLI frameworks, built for Zig's strengths.
 ## Features
 
 ### CLI Framework (Type-Safe)
+
 - **Compile-Time Validation**: All field access validated at compile time
 - **Struct-Based Options**: Define CLI options as structs - auto-generate everything
 - **Zero Runtime Overhead**: All type checking happens at compile time
@@ -33,6 +34,7 @@ Inspired by modern CLI frameworks, built for Zig's strengths.
 - **Middleware System**: Type-safe pre/post command hooks
 
 ### Interactive Prompts
+
 - **State Machine**: Clean 5-state state machine (initial -> active <-> error -> submit/cancel)
 - **Event-driven**: Fine-grained event system for prompt interactions
 - **Terminal Detection**: Automatic Unicode/ASCII and color support detection
@@ -51,6 +53,7 @@ Inspired by modern CLI frameworks, built for Zig's strengths.
   - Box/panel rendering for organized output
 
 ### Terminal Features
+
 - **ANSI Colors**: Full color support with automatic detection
 - **Style Chaining**: Composable styling API (`.red().bold().underline()`)
 - **Raw Mode**: Cross-platform terminal raw mode handling
@@ -62,6 +65,7 @@ Inspired by modern CLI frameworks, built for Zig's strengths.
 - **Table Rendering**: Column alignment, auto-width, multiple border styles
 
 ### Configuration
+
 - **Multiple Formats**: TOML, JSONC (JSON with Comments), JSON5
 - **Auto-discovery**: Automatically find config files in standard locations
 - **Type-safe Access**: Typed getters for strings, integers, floats, booleans
@@ -137,6 +141,7 @@ pub fn main(init: std.process.Init) !void {
 That's it! Run with: `myapp greet --name Alice --enthusiastic`
 
 **Benefits:**
+
 - Options auto-generated from struct fields
 - Compile-time validation - typos caught by compiler
 - Full IDE autocomplete support
@@ -234,6 +239,7 @@ pub fn main(init: std.process.Init) !void {
 ```
 
 Benefits:
+
 - **Compile-time validation** - field names validated at compile time
 - **IDE autocomplete** - full IntelliSense support
 - **Type safety** - no runtime string parsing or optionals
@@ -258,6 +264,7 @@ _ = try cmd.addOption(option);
 ```
 
 Option types:
+
 - `.string` - String value
 - `.int` - Integer value
 - `.float` - Float value
@@ -305,7 +312,7 @@ try chain.use(cli.Middleware.Middleware.init("timing", cli.Middleware.timingMidd
 try chain.use(cli.Middleware.Middleware.init("validation", cli.Middleware.validationMiddleware));
 
 // Custom middleware
-fn authMiddleware(ctx: *cli.Middleware.MiddlewareContext) !bool {
+fn authMiddleware(ctx: _cli.Middleware.MiddlewareContext) !bool {
     const is_authenticated = checkAuth();
     if (!is_authenticated) {
         try ctx.set("error", "Unauthorized");
@@ -329,6 +336,7 @@ if (try chain.execute(&middleware_ctx)) {
 ```
 
 Built-in middleware:
+
 - `loggingMiddleware` - Logs command execution
 - `timingMiddleware` - Records start time
 - `validationMiddleware` - Validates required options
@@ -337,7 +345,7 @@ Built-in middleware:
 #### Command Actions (Low-Level)
 
 ```zig
-fn myAction(ctx: *cli.BaseCommand.ParseContext) !void {
+fn myAction(ctx: _cli.BaseCommand.ParseContext) !void {
     // Get option value
     const value = ctx.getOption("name") orelse "default";
 
@@ -410,6 +418,7 @@ defer discovered.deinit();
 ```
 
 Supported types:
+
 - Primitives: `bool`, `i8`-`i64`, `u8`-`u64`, `f32`, `f64`
 - Strings: `[]const u8`
 - Enums: Any Zig enum
@@ -434,6 +443,7 @@ defer allocator.free(value);
 ```
 
 Custom validator:
+
 ```zig
 fn myValidator(value: []const u8) ?[]const u8 {
     if (value.len < 3) {
@@ -493,7 +503,7 @@ defer {
 var password = prompt.PasswordPrompt.init(allocator, "Enter password:");
 defer password.deinit();
 
-_ = password.withMaskChar('*');
+_ = password.withMaskChar('_');
 _ = password.withValidation(validatePassword);
 
 const pwd = try password.prompt();
@@ -562,6 +572,7 @@ const port_int = @as(u16, @intFromFloat(port));
 ```
 
 Number types:
+
 - `.integer` - Integer values
 - `.float` - Floating-point values
 
@@ -581,6 +592,7 @@ defer allocator.free(path);
 ```
 
 Path types:
+
 - `.file` - File selection
 - `.directory` - Directory selection
 - `.any` - File or directory
@@ -624,7 +636,7 @@ try progress.start();
 
 for (0..100) |i| {
     // Do some work
-    _ = std.c.nanosleep(&.{ .sec = 0, .nsec = 50 * std.time.ns_per_ms }, null);
+    _ = std.c.nanosleep(&.{ .sec = 0, .nsec = 50 _ std.time.ns_per_ms }, null);
     try progress.update(i + 1);
 }
 
@@ -632,6 +644,7 @@ try progress.finish();
 ```
 
 Progress bar styles:
+
 - `.bar` - Classic progress bar
 - `.blocks` - Block characters
 - `.dots` - Dots
@@ -741,6 +754,7 @@ if (raw_config.getBool("debug")) |debug| {
 #### Supported Formats
 
 **TOML:**
+
 ```toml
 # config.toml
 name = "myapp"
@@ -751,6 +765,7 @@ host = "localhost"
 ```
 
 **JSONC (JSON with Comments):**
+
 ```jsonc
 {
   // Comments are allowed
@@ -763,6 +778,7 @@ host = "localhost"
 ```
 
 **JSON5:**
+
 ```json5
 {
   // Unquoted keys
@@ -813,6 +829,7 @@ Check out the `examples/` directory for complete examples:
 - `config.zig` - Configuration file examples (TOML, JSONC, JSON5)
 
 Example config files are in `examples/configs/`:
+
 - `example.toml` - TOML format example
 - `example.jsonc` - JSONC format example
 - `example.json5` - JSON5 format example
@@ -828,6 +845,7 @@ zig build run-showcase      # Run the showcase
 ## Architecture
 
 ### CLI Framework
+
 ```
 Command(T) (typed, compile-time validated)
 ├── BaseCommand (underlying command)
@@ -839,6 +857,7 @@ Command(T) (typed, compile-time validated)
 ```
 
 ### Prompt System
+
 ```
 PromptCore (state machine)
 ├── Terminal I/O
@@ -913,6 +932,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## Roadmap
 
 ### Completed Features
+
 - [x] Spinner/loading indicators
 - [x] Box/panel rendering
 - [x] Message prompts (intro, outro, note, log, cancel)
@@ -933,6 +953,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
   - [x] TypedMiddleware with compile-time field checking
 
 ### Future Enhancements
+
 - [ ] Tree rendering for hierarchical data
 - [ ] Date/time prompts
 - [ ] Shell completion generation (bash, zsh, fish)
