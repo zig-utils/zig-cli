@@ -11,3 +11,4 @@ zig-cache/
 *.exe
 *.wasm
 *.a
+pantry
