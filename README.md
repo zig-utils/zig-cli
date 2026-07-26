@@ -921,6 +921,16 @@ zig build test         # Run all tests
 zig build examples     # Build all examples
 ```
 
+## Community
+
+For help, discussion about best practices, or any other conversation that would benefit from being searchable:
+
+[Discussions on GitHub](https://github.com/zig-utils/zig-cli/discussions)
+
+For casual chit-chat with others using this package:
+
+[Join the Stacks Discord Server](https://stacksjs.com/discord)
+
 ## License
 
 MIT
