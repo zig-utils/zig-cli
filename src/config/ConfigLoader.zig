@@ -91,17 +91,17 @@ pub fn TypedConfig(comptime T: type) type {
             }
 
             var result: StructType = undefined;
-            const fields = struct_info.@"struct".fields;
+            const fields = struct_info.@"struct";
 
-            inline for (fields) |field| {
+            inline for (fields.field_names, fields.field_types, fields.field_attrs) |field_name, field_type, field_attrs| {
                 const full_key = if (prefix.len > 0)
-                    try std.fmt.allocPrint(allocator, "{s}.{s}", .{ prefix, field.name })
+                    try std.fmt.allocPrint(allocator, "{s}.{s}", .{ prefix, field_name })
                 else
-                    field.name;
+                    field_name;
                 defer if (prefix.len > 0) allocator.free(full_key);
 
-                const field_value = try parseField(field.type, allocator, config, full_key, field.default_value_ptr);
-                @field(result, field.name) = field_value;
+                const field_value = try parseField(field_type, allocator, config, full_key, field_attrs.default_value_ptr);
+                @field(result, field_name) = field_value;
             }
 
             return result;
@@ -207,9 +207,9 @@ pub fn TypedConfig(comptime T: type) type {
                         .string => |s| s,
                         else => return error.TypeMismatch,
                     };
-                    inline for (enum_info.fields) |enum_field| {
-                        if (std.mem.eql(u8, str, enum_field.name)) {
-                            break :blk @field(ValueType, enum_field.name);
+                    inline for (enum_info.field_names) |field_name| {
+                        if (std.mem.eql(u8, str, field_name)) {
+                            break :blk @field(ValueType, field_name);
                         }
                     }
                     return error.InvalidEnumValue;

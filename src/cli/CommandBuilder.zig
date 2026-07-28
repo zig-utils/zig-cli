@@ -33,9 +33,9 @@ pub fn TypedCommand(comptime T: type) type {
             const cmd = try Command.init(allocator, name, description);
 
             // Auto-generate options from struct fields
-            const fields = type_info.@"struct".fields;
-            inline for (fields) |field| {
-                const opt = createOptionFromField(field);
+            const struct_info = type_info.@"struct";
+            inline for (struct_info.field_names, struct_info.field_types, struct_info.field_attrs) |field_name, field_type, field_attrs| {
+                const opt = createOptionFromField(field_name, field_type, field_attrs.default_value_ptr != null);
                 _ = try cmd.addOption(opt);
             }
 
@@ -50,9 +50,7 @@ pub fn TypedCommand(comptime T: type) type {
             self.allocator.destroy(self.command);
         }
 
-        fn createOptionFromField(comptime field: std.builtin.Type.StructField) Option {
-            const field_type = field.type;
-
+        fn createOptionFromField(comptime field_name: []const u8, comptime field_type: type, comptime has_default: bool) Option {
             // Determine if optional
             const field_info = @typeInfo(field_type);
             const is_optional = field_info == .optional;
@@ -67,16 +65,15 @@ pub fn TypedCommand(comptime T: type) type {
                     if (ptr.size == .slice and ptr.child == u8) {
                         break :blk .string;
                     }
-                    @compileError("Unsupported pointer type for field '" ++ field.name ++ "': " ++ @typeName(field_type));
+                    @compileError("Unsupported pointer type for field '" ++ field_name ++ "': " ++ @typeName(field_type));
                 },
                 .@"enum" => .string, // Enums stored as strings, validated on parse
-                else => @compileError("Unsupported type for field '" ++ field.name ++ "': " ++ @typeName(field_type)),
+                else => @compileError("Unsupported type for field '" ++ field_name ++ "': " ++ @typeName(field_type)),
             };
 
-            var opt = Option.init(field.name, field.name, "Auto-generated option for " ++ field.name, option_type);
+            var opt = Option.init(field_name, field_name, "Auto-generated option for " ++ field_name, option_type);
 
             // Set required based on whether it's optional
-            const has_default = field.default_value_ptr != null;
             opt = opt.withRequired(!is_optional and !has_default);
 
             // Note: Default values are handled at runtime during parsing
@@ -131,8 +128,8 @@ pub fn TypedContext(comptime T: type) type {
                     return null;
                 }
                 // Should not happen if validation worked, but handle gracefully
-                if (field_info.default_value_ptr) |default_ptr| {
-                    return @as(*const FieldType, @ptrCast(@alignCast(default_ptr))).*;
+                if (field_info.attrs.defaultValue(FieldType)) |default_value| {
+                    return default_value;
                 }
                 @panic("Missing required field: " ++ field_name);
             }
@@ -168,10 +165,10 @@ pub fn TypedContext(comptime T: type) type {
         /// Parse the entire context into a typed struct
         pub fn parse(self: *Self) !T {
             var result: T = undefined;
-            const fields = @typeInfo(T).@"struct".fields;
+            const field_names = @typeInfo(T).@"struct".field_names;
 
-            inline for (fields) |field| {
-                @field(result, field.name) = self.get(@field(std.meta.FieldEnum(T), field.name));
+            inline for (field_names) |field_name| {
+                @field(result, field_name) = self.get(@field(std.meta.FieldEnum(T), field_name));
             }
 
             return result;

@@ -44,7 +44,7 @@ pub fn main(init: std.process.Init) !void {
     _ = cmd.setAction(greet);
 
     // Collect command line arguments
-    var args_list = std.ArrayList([]const u8){};
+    var args_list: std.ArrayList([]const u8) = .empty;
     defer args_list.deinit(allocator);
     var args_iter = std.process.Args.Iterator.init(init.minimal.args);
     _ = args_iter.skip(); // skip program name
