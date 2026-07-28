@@ -1,6 +1,6 @@
 {
   "name": "zig-cli",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "scripts": {
     "release:patch": "pantry release patch --yes",
     "release": "pantry release patch --yes",
