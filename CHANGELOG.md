@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.4 - 2026-11-17
+
+- fix: keep Parser.parse and setAction compatible with zig-cli 0.1 (7e302d2)
+- feat!: nested subcommands, repeatable options, exit codes and --json (19f33f5)
+
 ## v0.1.3 - 2026-07-28
 
 - fix: support latest Zig 0.17 dev (0c2e1b1)
