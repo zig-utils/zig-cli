@@ -1,6 +1,6 @@
 .{
     .name = .zig_cli,
-    .version = "0.1.4",
+    .version = "0.1.5",
     .minimum_zig_version = "0.17.0-dev",
     .paths = .{
         "build.zig",

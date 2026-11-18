@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.5 - 2026-11-17
+
+- feat: print the version for --version and -V in cli.run (f17b7da)
+
 ## v0.1.4 - 2026-11-17
 
 - fix: keep Parser.parse and setAction compatible with zig-cli 0.1 (7e302d2)
