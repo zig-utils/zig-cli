@@ -9,26 +9,41 @@ pub fn init(allocator: std.mem.Allocator) Help {
     return .{ .allocator = allocator };
 }
 
-fn getWriter() std.Io.File.Writer {
-    const io = std.Options.debug_io;
-    var buf: [4096]u8 = undefined;
-    return std.Io.File.stdout().writerStreaming(io, &buf);
-}
-
 pub fn generate(self: *Help, command: *Command, cli_name: []const u8, version: []const u8) !void {
     _ = self;
     var buf: [4096]u8 = undefined;
     const io = std.Options.debug_io;
     var file_writer = std.Io.File.stdout().writerStreaming(io, &buf);
     const stdout = &file_writer.interface;
+    var path = [_]*Command{command};
+    try write(stdout, &path, .{ .name = cli_name, .version = version });
+    try stdout.flush();
+}
+
+pub const WriteOptions = struct {
+    /// Shown in the header instead of the root command's name.
+    name: ?[]const u8 = null,
+    version: []const u8 = "",
+};
+
+/// Write help for the last command of `path` (root first), e.g. the path
+/// `Parser.path()` returns. Options of enclosing commands are listed as global.
+pub fn write(stdout: *std.Io.Writer, path: []const *Command, options: WriteOptions) !void {
+    const command = path[path.len - 1];
+    const name = options.name orelse path[0].name;
 
     // Header
-    try stdout.print("\n{s} v{s}\n", .{ cli_name, version });
+    if (options.version.len > 0) {
+        try stdout.print("\n{s} v{s}\n", .{ name, options.version });
+    } else {
+        try stdout.print("\n{s}\n", .{name});
+    }
     try stdout.print("{s}\n\n", .{command.description});
 
     // Usage
     try stdout.print("USAGE:\n", .{});
-    try stdout.print("  {s}", .{command.name});
+    try stdout.print("  {s}", .{name});
+    for (path[1..]) |cmd| try stdout.print(" {s}", .{cmd.name});
 
     if (command.options.items.len > 0) {
         try stdout.print(" [OPTIONS]", .{});
@@ -70,51 +85,30 @@ pub fn generate(self: *Help, command: *Command, cli_name: []const u8, version: [
     }
 
     // Options
-    if (command.options.items.len > 0) {
-        try stdout.print("OPTIONS:\n", .{});
-        for (command.options.items) |opt| {
-            var length: usize = 0;
+    var json = false;
+    for (path) |cmd| json = json or cmd.json_output;
+    try stdout.print("OPTIONS:\n", .{});
+    for (command.options.items) |opt| try writeOption(stdout, opt);
+    try stdout.print("  -h, --help", .{});
+    for (0..20) |_| try stdout.writeByte(' ');
+    try stdout.print("Print help\n", .{});
+    if (json) {
+        try stdout.print("      --json", .{});
+        for (0..20) |_| try stdout.writeByte(' ');
+        try stdout.print("Machine-readable JSON output\n", .{});
+    }
+    try stdout.print("\n", .{});
 
-            if (opt.short) |s| {
-                try stdout.print("  -{c}, ", .{s});
-                length += 6;
-            } else {
-                try stdout.print("      ", .{});
-                length += 6;
+    if (path.len > 1) {
+        var any = false;
+        for (path[0 .. path.len - 1]) |cmd| any = any or cmd.options.items.len > 0;
+        if (any) {
+            try stdout.print("GLOBAL OPTIONS:\n", .{});
+            for (path[0 .. path.len - 1]) |cmd| {
+                for (cmd.options.items) |opt| try writeOption(stdout, opt);
             }
-
-            try stdout.print("--{s}", .{opt.long});
-            length += opt.long.len + 2;
-
-            if (opt.option_type != .bool) {
-                const type_name = switch (opt.option_type) {
-                    .string => "<VALUE>",
-                    .int => "<INT>",
-                    .float => "<FLOAT>",
-                    .bool => "",
-                };
-                try stdout.print(" {s}", .{type_name});
-                length += type_name.len + 1;
-            }
-
-            const padding = 30 -| length;
-            for (0..padding) |_| try stdout.writeByte(' ');
-
-            try stdout.print("{s}", .{opt.description});
-
-            if (opt.required) {
-                try stdout.print(" (required)", .{});
-            } else if (opt.default_value) |default| {
-                try stdout.print(" (default: {s})", .{default});
-            }
-
             try stdout.print("\n", .{});
         }
-
-        try stdout.print("  -h, --help", .{});
-        for (0..20) |_| try stdout.writeByte(' ');
-        try stdout.print("Print help\n", .{});
-        try stdout.print("\n", .{});
     }
 
     // Commands
@@ -127,8 +121,50 @@ pub fn generate(self: *Help, command: *Command, cli_name: []const u8, version: [
             try stdout.print("{s}\n", .{subcmd.description});
         }
         try stdout.print("\n", .{});
-        try stdout.print("Run '{s} <COMMAND> --help' for more information on a command.\n\n", .{command.name});
+        try stdout.print("Run '{s}", .{name});
+        for (path[1..]) |cmd| try stdout.print(" {s}", .{cmd.name});
+        try stdout.print(" <COMMAND> --help' for more information on a command.\n\n", .{});
+    }
+}
+
+fn writeOption(stdout: *std.Io.Writer, opt: @import("Option.zig")) !void {
+    var length: usize = 0;
+
+    if (opt.short) |s| {
+        try stdout.print("  -{c}, ", .{s});
+        length += 6;
+    } else {
+        try stdout.print("      ", .{});
+        length += 6;
     }
 
-    try stdout.flush();
+    try stdout.print("--{s}", .{opt.long});
+    length += opt.long.len + 2;
+
+    if (opt.option_type != .bool) {
+        const type_name = switch (opt.option_type) {
+            .string => "<VALUE>",
+            .int => "<INT>",
+            .float => "<FLOAT>",
+            .bool => "",
+        };
+        try stdout.print(" {s}", .{type_name});
+        length += type_name.len + 1;
+    }
+
+    const padding = 30 -| length;
+    for (0..padding) |_| try stdout.writeByte(' ');
+
+    try stdout.print("{s}", .{opt.description});
+
+    if (opt.repeatable) {
+        try stdout.print(" (repeatable)", .{});
+    }
+    if (opt.required) {
+        try stdout.print(" (required)", .{});
+    } else if (opt.default_value) |default| {
+        try stdout.print(" (default: {s})", .{default});
+    }
+
+    try stdout.print("\n", .{});
 }

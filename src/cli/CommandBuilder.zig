@@ -56,8 +56,11 @@ pub fn TypedCommand(comptime T: type) type {
             const is_optional = field_info == .optional;
             const base_type = if (is_optional) field_info.optional.child else field_type;
 
+            // `[]const []const u8`: a repeatable string option.
+            const repeatable = comptime isStringList(base_type);
+
             // Map Zig types to Option types
-            const option_type: Option.OptionType = switch (@typeInfo(base_type)) {
+            const option_type: Option.OptionType = if (repeatable) .string else switch (@typeInfo(base_type)) {
                 .bool => .bool,
                 .int => .int,
                 .float => .float,
@@ -75,6 +78,7 @@ pub fn TypedCommand(comptime T: type) type {
 
             // Set required based on whether it's optional
             opt = opt.withRequired(!is_optional and !has_default);
+            opt = opt.withRepeatable(repeatable);
 
             // Note: Default values are handled at runtime during parsing
             // We just mark the option as not required if it has a default
@@ -82,8 +86,24 @@ pub fn TypedCommand(comptime T: type) type {
             return opt;
         }
 
-        pub fn setAction(self: *Self, comptime action: TypedAction(T)) *Self {
-            self.command.action = wrapTypedAction(T, action);
+        /// Set what the command runs: a function taking `*TypedContext(T)` and
+        /// returning `!u8` (the exit code) or `!void` (exit code 0).
+        pub fn setAction(self: *Self, comptime action: anytype) *Self {
+            self.command.action = Command.toAction(TypedContext(T), action, TypedContext(T).init);
+            return self;
+        }
+
+        /// Nest `sub` (a `TypedCommand` or a `*BaseCommand`) under this command.
+        /// This command owns it from now on: do not `deinit` it separately.
+        pub fn addCommand(self: *Self, sub: anytype) !*Self {
+            const child: *Command = if (@TypeOf(sub) == *Command) sub else sub.command;
+            _ = try self.command.addCommand(child);
+            return self;
+        }
+
+        /// Offer the built-in `--json` flag on this command and its subcommands.
+        pub fn enableJson(self: *Self) *Self {
+            _ = self.command.enableJson();
             return self;
         }
 
@@ -119,6 +139,14 @@ pub fn TypedContext(comptime T: type) type {
             const type_info = @typeInfo(FieldType);
             const is_optional = type_info == .optional;
             const base_type = if (is_optional) type_info.optional.child else FieldType;
+
+            if (comptime isStringList(base_type)) {
+                const values = self.parse_context.getOptionValues(field_name);
+                if (values.len == 0) {
+                    if (field_info.attrs.defaultValue(FieldType)) |default_value| return default_value;
+                }
+                return values;
+            }
 
             const value_str = self.parse_context.getOption(field_name);
 
@@ -162,6 +190,16 @@ pub fn TypedContext(comptime T: type) type {
             };
         }
 
+        /// Whether the caller asked for machine-readable output (`--json`).
+        pub fn wantsJson(self: *const Self) bool {
+            return self.parse_context.wantsJson();
+        }
+
+        /// Write `value` as one line of JSON to the command's output.
+        pub fn writeJson(self: *Self, value: anytype) !void {
+            return self.parse_context.writeJson(value);
+        }
+
         /// Parse the entire context into a typed struct
         pub fn parse(self: *Self) !T {
             var result: T = undefined;
@@ -180,20 +218,22 @@ fn TypedFieldType(comptime T: type, comptime field: std.meta.FieldEnum(T)) type 
     return std.meta.fieldInfo(T, field).type;
 }
 
-/// Type-safe action function signature
+/// Type-safe action function signature. Actions may also return `anyerror!u8`
+/// to choose the exit code (`TypedActionWithCode`).
 pub fn TypedAction(comptime T: type) type {
     return *const fn (ctx: *TypedContext(T)) anyerror!void;
 }
 
-/// Wrap a typed action to work with the regular Command.ParseContext
-fn wrapTypedAction(comptime T: type, comptime typed_action: TypedAction(T)) Command.CommandAction {
-    const Wrapper = struct {
-        fn wrapper(ctx: *Command.ParseContext) anyerror!void {
-            var typed_ctx = TypedContext(T).init(ctx);
-            try typed_action(&typed_ctx);
-        }
+/// A typed action that returns the process exit code.
+pub fn TypedActionWithCode(comptime T: type) type {
+    return *const fn (ctx: *TypedContext(T)) anyerror!u8;
+}
+
+fn isStringList(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .pointer => |ptr| ptr.size == .slice and ptr.child == []const u8,
+        else => false,
     };
-    return Wrapper.wrapper;
 }
 
 // ============================================================================

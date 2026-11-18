@@ -14,6 +14,16 @@ pub const Context = @import("cli/CommandBuilder.zig").TypedContext;
 /// Action function signature
 pub const Action = @import("cli/CommandBuilder.zig").TypedAction;
 
+/// Action function signature for actions that return the exit code
+pub const ActionWithCode = @import("cli/CommandBuilder.zig").TypedActionWithCode;
+
+/// Parse arguments, run the resolved (sub)command and return the exit code:
+/// `pub fn main(init: std.process.Init) !u8 { ...; return cli.run(gpa, cmd, args, .{ ... }); }`
+pub const run = @import("cli/run.zig").run;
+
+/// Writers and version for `run`
+pub const RunOptions = @import("cli/run.zig").RunOptions;
+
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -49,4 +59,5 @@ pub const BaseCommand = @import("cli/Command.zig");
 
 test {
     std.testing.refAllDecls(@This());
+    _ = @import("cli/cli_test.zig");
 }

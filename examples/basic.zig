@@ -26,7 +26,7 @@ fn infoAction(ctx: *cli.BaseCommand.ParseContext) !void {
     try stdout.flush();
 }
 
-pub fn main(init: std.process.Init) !void {
+pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
 
     // Create root command
@@ -66,6 +66,13 @@ pub fn main(init: std.process.Init) !void {
         try args_list.append(allocator, arg);
     }
 
-    var parser = cli.Parser.init(allocator);
-    try parser.parse(root_cmd, args_list.items);
+    // Parse, run the command and hand its exit code back to the shell.
+    var stdout_buf: [4096]u8 = undefined;
+    var stdout = std.Io.File.stdout().writerStreaming(init.io, &stdout_buf);
+    var stderr_buf: [1024]u8 = undefined;
+    var stderr = std.Io.File.stderr().writerStreaming(init.io, &stderr_buf);
+    return cli.run(allocator, root_cmd, args_list.items, .{
+        .stdout = &stdout.interface,
+        .stderr = &stderr.interface,
+    });
 }

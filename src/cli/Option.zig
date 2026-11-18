@@ -16,6 +16,8 @@ description: []const u8,
 option_type: OptionType,
 required: bool = false,
 default_value: ?[]const u8 = null,
+/// May be given more than once; every value is kept (`ParseContext.getOptionValues`).
+repeatable: bool = false,
 
 pub fn init(name: []const u8, long: []const u8, description: []const u8, option_type: OptionType) Option {
     return .{
@@ -41,6 +43,12 @@ pub fn withRequired(self: Option, required: bool) Option {
 pub fn withDefault(self: Option, default_value: []const u8) Option {
     var opt = self;
     opt.default_value = default_value;
+    return opt;
+}
+
+pub fn withRepeatable(self: Option, repeatable: bool) Option {
+    var opt = self;
+    opt.repeatable = repeatable;
     return opt;
 }
 

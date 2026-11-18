@@ -114,7 +114,7 @@ fn greet(ctx: *cli.Context(GreetOptions)) !void {
     try stdout.flush();
 }
 
-pub fn main(init: std.process.Init) !void {
+pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
 
     // 3. Create command - options auto-generated!
@@ -123,7 +123,7 @@ pub fn main(init: std.process.Init) !void {
 
     _ = cmd.setAction(greet);
 
-    // 4. Parse args and execute
+    // 4. Parse args, execute, and return the exit code
     var args_list = std.ArrayList([]const u8){};
     defer args_list.deinit(allocator);
 
@@ -133,8 +133,14 @@ pub fn main(init: std.process.Init) !void {
         try args_list.append(allocator, arg);
     }
 
-    var parser = cli.Parser.init(allocator);
-    try parser.parse(cmd.getCommand(), args_list.items);
+    var out_buf: [4096]u8 = undefined;
+    var out = std.Io.File.stdout().writerStreaming(init.io, &out_buf);
+    var err_buf: [1024]u8 = undefined;
+    var err = std.Io.File.stderr().writerStreaming(init.io, &err_buf);
+    return cli.run(allocator, cmd.getCommand(), args_list.items, .{
+        .stdout = &out.interface,
+        .stderr = &err.interface,
+    });
 }
 ```
 
@@ -215,7 +221,7 @@ fn greetAction(ctx: *cli.Context(GreetOptions)) !void {
     std.debug.print("Hello, {s}!\n", .{opts.name});
 }
 
-pub fn main(init: std.process.Init) !void {
+pub fn main(init: std.process.Init) !u8 {
     const allocator = init.gpa;
 
     // Auto-generates CLI options from struct fields!
@@ -233,8 +239,14 @@ pub fn main(init: std.process.Init) !void {
         try args_list.append(allocator, arg);
     }
 
-    var parser = cli.Parser.init(allocator);
-    try parser.parse(cmd.getCommand(), args_list.items);
+    var out_buf: [4096]u8 = undefined;
+    var out = std.Io.File.stdout().writerStreaming(init.io, &out_buf);
+    var err_buf: [1024]u8 = undefined;
+    var err = std.Io.File.stderr().writerStreaming(init.io, &err_buf);
+    return cli.run(allocator, cmd.getCommand(), args_list.items, .{
+        .stdout = &out.interface,
+        .stderr = &err.interface,
+    });
 }
 ```
 
@@ -245,6 +257,48 @@ Benefits:
 - **Type safety** - no runtime string parsing or optionals
 - **Auto-generation** - options automatically created from struct
 - **Zero overhead** - comptime code generates efficient runtime
+
+#### Subcommands, Repeatable Options, Exit Codes and JSON
+
+Commands nest to any depth (up to `cli.Parser.max_depth`). Options of a command
+also apply to its subcommands, before or after the subcommand name, and are
+listed as global options in their help:
+
+```zig
+const ScanOptions = struct {
+    exclude: []const []const u8 = &.{}, // repeatable: --exclude a --exclude b
+    depth: u8 = 4,
+};
+
+fn scan(ctx: *cli.Context(ScanOptions)) !u8 {
+    const opts = try ctx.parse();
+    if (ctx.wantsJson()) try ctx.writeJson(.{ .excluded = opts.exclude.len });
+    return if (opts.exclude.len == 0) 0 else 1; // the process exit code
+}
+
+var root = try cli.Command(struct { verbose: bool = false }).init(gpa, "zav", "Scanner");
+defer root.deinit(); // also frees the subcommands
+_ = root.enableJson(); // accept --json here and in every subcommand
+
+var db = try cli.Command(struct {}).init(gpa, "db", "Signature databases");
+var scan_cmd = try cli.Command(ScanOptions).init(gpa, "scan", "Scan files");
+_ = scan_cmd.setAction(scan);
+_ = try db.addCommand(scan_cmd); // `db` now owns `scan_cmd`
+_ = try root.addCommand(db);     // `zav --verbose db scan --exclude=a --exclude b`
+```
+
+- **Repeatable options**: a `[]const []const u8` field, or
+  `cli.Option.init(...).withRepeatable(true)` read with `ctx.getOptionValues(name)`.
+  A plain option given twice keeps the last value.
+- **Exit codes**: actions return `!u8` (the exit code) or `!void` (0).
+  `cli.run` returns the code for `main` to return: the action's own, 0 after
+  `--help`, 2 for a command line that does not parse or a command group given
+  without a command, 1 when the action returns an error. `Parser.parse` returns
+  the action's code too.
+- **JSON**: `enableJson()` adds a built-in `--json` flag. Actions check
+  `ctx.wantsJson()` and write with `ctx.writeJson(value)`; `cli.run` then reports
+  errors as `{"error":{"kind":"UnknownOption","message":"..."}}` on stderr.
+- `--name=value` works for every option, and `--` ends option parsing.
 
 #### Low-Level Command API
 
