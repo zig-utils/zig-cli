@@ -309,3 +309,14 @@ test "typed commands nest, take repeatable slice fields and return exit codes" {
     try testing.expectEqual(@as(usize, 0), typed_seen.excludes);
     try testing.expectEqual(@as(u8, 4), typed_seen.depth);
 }
+
+test "--version prints the name and version when one is configured" {
+    const root = try zav(testing.allocator);
+    defer destroy(root);
+    var out: Outputs = .init();
+    defer out.deinit();
+    try testing.expectEqual(@as(u8, 0), out.run(root, &.{"--version"}));
+    try testing.expectEqualStrings("zav 1.0.0\n", out.stdout.written());
+    try testing.expectEqual(@as(u8, 0), out.run(root, &.{"-V"}));
+    try testing.expectEqual(@as(usize, 0), seen.runs);
+}

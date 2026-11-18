@@ -10,7 +10,7 @@ pub const RunOptions = struct {
     stdout: *std.Io.Writer,
     /// Error reports.
     stderr: *std.Io.Writer,
-    /// Shown in help headers.
+    /// Shown in help headers, and printed for `--version` / `-V` when set.
     version: []const u8 = "",
 };
 
@@ -26,6 +26,8 @@ pub const exit_failure: u8 = 1;
 ///
 /// - the action's own code (an action returning `!void` gives 0),
 /// - 0 after printing help for `--help` / `-h`,
+/// - 0 after printing `<name> <version>` for `--version` / `-V` as the first
+///   argument, when `options.version` is set,
 /// - `exit_usage` (2) when the command line does not parse, or names a command
 ///   group without one of its commands (its help goes to stderr),
 /// - `exit_failure` (1) when the action returns an error.
@@ -36,6 +38,13 @@ pub const exit_failure: u8 = 1;
 pub fn run(allocator: std.mem.Allocator, root: *Command, args: []const []const u8, options: RunOptions) u8 {
     defer options.stdout.flush() catch {};
     defer options.stderr.flush() catch {};
+
+    if (options.version.len > 0 and args.len > 0 and
+        (std.mem.eql(u8, args[0], "--version") or std.mem.eql(u8, args[0], "-V")))
+    {
+        options.stdout.print("{s} {s}\n", .{ root.name, options.version }) catch {};
+        return 0;
+    }
 
     var parser = Parser.init(allocator);
     parser.report_errors = false;
