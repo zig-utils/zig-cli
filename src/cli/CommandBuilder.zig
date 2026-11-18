@@ -86,10 +86,15 @@ pub fn TypedCommand(comptime T: type) type {
             return opt;
         }
 
-        /// Set what the command runs: a function taking `*TypedContext(T)` and
-        /// returning `!u8` (the exit code) or `!void` (exit code 0).
-        pub fn setAction(self: *Self, comptime action: anytype) *Self {
-            self.command.action = Command.toAction(TypedContext(T), action, TypedContext(T).init);
+        pub fn setAction(self: *Self, comptime action: TypedAction(T)) *Self {
+            self.command.action = wrapTypedAction(T, action);
+            return self;
+        }
+
+        /// Set an action that returns the process exit code (see
+        /// `BaseCommand.setActionWithCode`).
+        pub fn setActionWithCode(self: *Self, comptime action: TypedActionWithCode(T)) *Self {
+            self.command.action_with_code = wrapTypedActionWithCode(T, action);
             return self;
         }
 
@@ -227,6 +232,27 @@ pub fn TypedAction(comptime T: type) type {
 /// A typed action that returns the process exit code.
 pub fn TypedActionWithCode(comptime T: type) type {
     return *const fn (ctx: *TypedContext(T)) anyerror!u8;
+}
+
+/// Wrap a typed action to work with the regular Command.ParseContext
+fn wrapTypedAction(comptime T: type, comptime typed_action: TypedAction(T)) Command.CommandAction {
+    const Wrapper = struct {
+        fn wrapper(ctx: *Command.ParseContext) anyerror!void {
+            var typed_ctx = TypedContext(T).init(ctx);
+            try typed_action(&typed_ctx);
+        }
+    };
+    return Wrapper.wrapper;
+}
+
+fn wrapTypedActionWithCode(comptime T: type, comptime typed_action: TypedActionWithCode(T)) Command.CommandActionWithCode {
+    const Wrapper = struct {
+        fn wrapper(ctx: *Command.ParseContext) anyerror!u8 {
+            var typed_ctx = TypedContext(T).init(ctx);
+            return typed_action(&typed_ctx);
+        }
+    };
+    return Wrapper.wrapper;
 }
 
 fn isStringList(comptime T: type) bool {

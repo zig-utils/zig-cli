@@ -4,9 +4,12 @@ const Argument = @import("Argument.zig");
 
 const Command = @This();
 
-/// What a command runs. The returned byte is the process exit code.
-/// `setAction` also accepts functions that return `!void` (exit code 0).
-pub const CommandAction = *const fn (context: *ParseContext) anyerror!u8;
+/// What a command runs.
+pub const CommandAction = *const fn (context: *ParseContext) anyerror!void;
+
+/// What a command runs when it chooses the process exit code
+/// (`setActionWithCode`). `Parser.parseForExit` and `cli.run` return it.
+pub const CommandActionWithCode = *const fn (context: *ParseContext) anyerror!u8;
 
 pub const ParseContext = struct {
     allocator: std.mem.Allocator,
@@ -87,42 +90,6 @@ pub const ParseContext = struct {
     }
 };
 
-/// Adapt an action returning `!void` (exit code 0) or `!u8` to `CommandAction`.
-pub fn toAction(comptime Context: type, comptime action: anytype, comptime wrap: fn (*ParseContext) Context) CommandAction {
-    const Fn = switch (@typeInfo(@TypeOf(action))) {
-        .@"fn" => @TypeOf(action),
-        .pointer => |ptr| ptr.child,
-        else => @compileError("an action must be a function, got " ++ @typeName(@TypeOf(action))),
-    };
-    const Return = @typeInfo(Fn).@"fn".return_type.?;
-    const Payload = switch (@typeInfo(Return)) {
-        .error_union => |eu| eu.payload,
-        else => Return,
-    };
-    if (Payload != void and Payload != u8) {
-        @compileError("an action must return !void or !u8, not " ++ @typeName(Return));
-    }
-    return struct {
-        fn call(ctx: *ParseContext) anyerror!u8 {
-            if (Context == *ParseContext) return invoke(ctx);
-            var wrapped = wrap(ctx);
-            return invoke(&wrapped);
-        }
-
-        fn invoke(arg: anytype) anyerror!u8 {
-            if (Payload == void) {
-                try action(arg);
-                return 0;
-            }
-            return try action(arg);
-        }
-    }.call;
-}
-
-fn identity(ctx: *ParseContext) *ParseContext {
-    return ctx;
-}
-
 name: []const u8,
 description: []const u8,
 aliases: std.ArrayList([]const u8),
@@ -130,6 +97,8 @@ options: std.ArrayList(Option),
 arguments: std.ArrayList(Argument),
 subcommands: std.ArrayList(*Command),
 action: ?CommandAction = null,
+/// Set by `setActionWithCode`; takes precedence over `action`.
+action_with_code: ?CommandActionWithCode = null,
 /// Accept the built-in `--json` flag here and in every subcommand.
 json_output: bool = false,
 allocator: std.mem.Allocator,
@@ -180,11 +149,28 @@ pub fn addCommand(self: *Command, subcommand: *Command) !*Command {
     return self;
 }
 
-/// Set what the command runs: a function taking `*ParseContext` and returning
-/// `!u8` (the exit code) or `!void` (exit code 0).
-pub fn setAction(self: *Command, comptime action: anytype) *Command {
-    self.action = toAction(*ParseContext, action, identity);
+pub fn setAction(self: *Command, action: CommandAction) *Command {
+    self.action = action;
     return self;
+}
+
+/// Set an action that returns the process exit code. `Parser.parseForExit`
+/// and `cli.run` hand the code back; `Parser.parse` runs it and drops it.
+pub fn setActionWithCode(self: *Command, action: CommandActionWithCode) *Command {
+    self.action_with_code = action;
+    return self;
+}
+
+/// Whether the command has anything to run.
+pub fn hasAction(self: *const Command) bool {
+    return self.action != null or self.action_with_code != null;
+}
+
+/// Run the command's action; 0 for an action that returns no code.
+pub fn runAction(self: *const Command, context: *ParseContext) anyerror!u8 {
+    if (self.action_with_code) |action| return action(context);
+    if (self.action) |action| try action(context);
+    return 0;
 }
 
 /// Offer the built-in `--json` flag on this command and its subcommands.

@@ -41,7 +41,7 @@ pub fn run(allocator: std.mem.Allocator, root: *Command, args: []const []const u
     parser.report_errors = false;
     parser.out = options.stdout;
 
-    const code = parser.parse(root, args) catch |err| {
+    const code = parser.parseForExit(root, args) catch |err| {
         const usage = isParseError(err);
         const message = if (parser.diagnostic().len > 0) parser.diagnostic() else @errorName(err);
         report(options.stderr, parser.json_requested, err, message) catch {};

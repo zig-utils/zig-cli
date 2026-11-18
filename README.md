@@ -270,7 +270,7 @@ const ScanOptions = struct {
     depth: u8 = 4,
 };
 
-fn scan(ctx: *cli.Context(ScanOptions)) !u8 {
+fn scan(ctx: *cli.Context(ScanOptions)) !u8 { // registered with setActionWithCode
     const opts = try ctx.parse();
     if (ctx.wantsJson()) try ctx.writeJson(.{ .excluded = opts.exclude.len });
     return if (opts.exclude.len == 0) 0 else 1; // the process exit code
@@ -282,7 +282,7 @@ _ = root.enableJson(); // accept --json here and in every subcommand
 
 var db = try cli.Command(struct {}).init(gpa, "db", "Signature databases");
 var scan_cmd = try cli.Command(ScanOptions).init(gpa, "scan", "Scan files");
-_ = scan_cmd.setAction(scan);
+_ = scan_cmd.setActionWithCode(scan);
 _ = try db.addCommand(scan_cmd); // `db` now owns `scan_cmd`
 _ = try root.addCommand(db);     // `zav --verbose db scan --exclude=a --exclude b`
 ```
@@ -290,11 +290,13 @@ _ = try root.addCommand(db);     // `zav --verbose db scan --exclude=a --exclude
 - **Repeatable options**: a `[]const []const u8` field, or
   `cli.Option.init(...).withRepeatable(true)` read with `ctx.getOptionValues(name)`.
   A plain option given twice keeps the last value.
-- **Exit codes**: actions return `!u8` (the exit code) or `!void` (0).
-  `cli.run` returns the code for `main` to return: the action's own, 0 after
-  `--help`, 2 for a command line that does not parse or a command group given
-  without a command, 1 when the action returns an error. `Parser.parse` returns
-  the action's code too.
+- **Exit codes**: `setActionWithCode` takes an action returning `!u8`
+  (`setAction` actions count as 0). `cli.run` returns the code for `main` to
+  return: the action's own, 0 after `--help`, 2 for a command line that does not
+  parse or a command group given without a command, 1 when the action returns an
+  error. `Parser.parseForExit` returns the action's code; `Parser.parse` keeps
+  its 0.1 behaviour (returns nothing, a bare command group does nothing, an
+  unknown word is `TooManyArguments`).
 - **JSON**: `enableJson()` adds a built-in `--json` flag. Actions check
   `ctx.wantsJson()` and write with `ctx.writeJson(value)`; `cli.run` then reports
   errors as `{"error":{"kind":"UnknownOption","message":"..."}}` on stderr.

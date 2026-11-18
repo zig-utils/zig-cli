@@ -87,17 +87,19 @@ pub fn write(stdout: *std.Io.Writer, path: []const *Command, options: WriteOptio
     // Options
     var json = false;
     for (path) |cmd| json = json or cmd.json_output;
-    try stdout.print("OPTIONS:\n", .{});
-    for (command.options.items) |opt| try writeOption(stdout, opt);
-    try stdout.print("  -h, --help", .{});
-    for (0..20) |_| try stdout.writeByte(' ');
-    try stdout.print("Print help\n", .{});
-    if (json) {
-        try stdout.print("      --json", .{});
+    if (command.options.items.len > 0 or json) {
+        try stdout.print("OPTIONS:\n", .{});
+        for (command.options.items) |opt| try writeOption(stdout, opt);
+        try stdout.print("  -h, --help", .{});
         for (0..20) |_| try stdout.writeByte(' ');
-        try stdout.print("Machine-readable JSON output\n", .{});
+        try stdout.print("Print help\n", .{});
+        if (json) {
+            try stdout.print("      --json", .{});
+            for (0..20) |_| try stdout.writeByte(' ');
+            try stdout.print("Machine-readable JSON output\n", .{});
+        }
+        try stdout.print("\n", .{});
     }
-    try stdout.print("\n", .{});
 
     if (path.len > 1) {
         var any = false;

@@ -72,7 +72,7 @@ fn zav(allocator: std.mem.Allocator) !*Command {
 
     const verify = try Command.init(allocator, "verify", "Verify a database");
     _ = try verify.addArgument(Argument.init("file", "Database", .string));
-    _ = verify.setAction(verifyAction);
+    _ = verify.setActionWithCode(verifyAction);
     _ = try db.addCommand(verify);
 
     const sign = try Command.init(allocator, "sign", "Signing");
@@ -209,14 +209,32 @@ test "exit codes: the action's own, 1 for an action error, 2 for usage, 0 for he
     try testing.expect(std.mem.indexOf(u8, out.stdout.written(), "(repeatable)") != null);
 }
 
-test "Parser.parse returns the action's exit code" {
+test "Parser.parseForExit returns the action's exit code" {
     const root = try zav(testing.allocator);
     defer destroy(root);
     var parser = Parser.init(testing.allocator);
     parser.report_errors = false;
-    try testing.expectEqual(@as(u8, 3), try parser.parse(root, &.{ "db", "verify", "bad" }));
+    try testing.expectEqual(@as(u8, 3), try parser.parseForExit(root, &.{ "db", "verify", "bad" }));
     try testing.expectEqual(@as(usize, 3), parser.path().len);
-    try testing.expectError(error.MissingCommand, parser.parse(root, &.{"db"}));
+    try testing.expectError(error.MissingCommand, parser.parseForExit(root, &.{"db"}));
+    try testing.expectError(error.UnknownCommand, parser.parseForExit(root, &.{"nope"}));
+}
+
+test "Parser.parse keeps the 0.1 contract" {
+    const root = try zav(testing.allocator);
+    defer destroy(root);
+    var parser = Parser.init(testing.allocator);
+    parser.report_errors = false;
+
+    // Returns void; an exit code from the action is run and dropped.
+    seen = .{};
+    try parser.parse(root, &.{ "db", "verify", "bad" });
+    try testing.expectEqual(@as(usize, 1), seen.runs);
+    // A group without a command does nothing, as before.
+    try parser.parse(root, &.{"db"});
+    // An unknown word is still TooManyArguments, which callers match on.
+    try testing.expectError(error.TooManyArguments, parser.parse(root, &.{"nope"}));
+    try testing.expectError(error.UnknownOption, parser.parse(root, &.{"--nope"}));
 }
 
 test "--json is offered where enabled and reaches the action" {
@@ -274,7 +292,7 @@ test "typed commands nest, take repeatable slice fields and return exit codes" {
     var root = try TypedCommand(struct { verbose: bool = false }).init(testing.allocator, "zav", "Scanner");
     defer root.deinit();
     var scan = try TypedCommand(ScanOptions).init(testing.allocator, "scan", "Scan");
-    _ = scan.setAction(typedScan);
+    _ = scan.setActionWithCode(typedScan);
     _ = try root.addCommand(scan);
 
     try testing.expect(scan.command.options.items[0].repeatable);

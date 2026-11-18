@@ -53,12 +53,34 @@ pub fn diagnostic(self: *const Parser) []const u8 {
 }
 
 /// Parse `args` (without the program name) against `command`, follow
-/// subcommands, and run the resolved command's action. Returns its exit code,
-/// or 0 when `--help` was given (see `help_requested`).
+/// subcommands, and run the resolved command's action.
+///
+/// Compatible with zig-cli 0.1: an exit code from `setActionWithCode` is
+/// dropped, a command group given without a command does nothing, and a word
+/// that is neither a subcommand nor an expected argument is
+/// `error.TooManyArguments`. Use `parseForExit` (or `cli.run`) for exit codes
+/// and the `UnknownCommand` / `MissingCommand` errors.
 ///
 /// Options of a command apply to its subcommands too, before or after the
 /// subcommand name. `--name=value` and `--` (end of options) are understood.
-pub fn parse(self: *Parser, command: *Command, args: []const []const u8) !u8 {
+pub fn parse(self: *Parser, command: *Command, args: []const []const u8) !void {
+    _ = self.parseImpl(command, args, .legacy) catch |err| switch (err) {
+        error.MissingCommand => return,
+        error.UnknownCommand => return error.TooManyArguments,
+        else => |e| return e,
+    };
+}
+
+/// Like `parse`, but returns the exit code of the resolved command's action
+/// (0 for `setAction` actions, and when `--help` was given; see
+/// `help_requested`), and reports `UnknownCommand` and `MissingCommand`.
+pub fn parseForExit(self: *Parser, command: *Command, args: []const []const u8) !u8 {
+    return self.parseImpl(command, args, .exit_code);
+}
+
+const Mode = enum { legacy, exit_code };
+
+fn parseImpl(self: *Parser, command: *Command, args: []const []const u8, mode: Mode) !u8 {
     self.path_len = 0;
     self.diagnostic_len = 0;
     self.help_requested = false;
@@ -138,6 +160,7 @@ pub fn parse(self: *Parser, command: *Command, args: []const []const u8) !u8 {
                 continue;
             }
             if (current.arguments.items.len == 0) {
+                if (mode == .legacy) return self.fail(ParseError.UnknownCommand, "Too many arguments provided", .{});
                 return self.fail(ParseError.UnknownCommand, "Unknown command '{s}'", .{arg});
             }
         }
@@ -178,8 +201,9 @@ pub fn parse(self: *Parser, command: *Command, args: []const []const u8) !u8 {
         return self.fail(ParseError.TooManyArguments, "Too many arguments provided", .{});
     }
 
-    if (current.action) |action| return action(&context);
+    if (current.hasAction()) return current.runAction(&context);
     if (current.subcommands.items.len > 0) {
+        if (mode == .legacy) return error.MissingCommand; // silently nothing, as before
         return self.fail(ParseError.MissingCommand, "'{s}' needs a command", .{current.name});
     }
     return 0;
