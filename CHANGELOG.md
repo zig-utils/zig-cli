@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.6 - 2026-11-18
+
+- fix(config): reject malformed TOML without panics or leaks (61263df)
+
 ## v0.1.5 - 2026-11-17
 
 - feat: print the version for --version and -V in cli.run (f17b7da)
