@@ -318,5 +318,37 @@ test "--version prints the name and version when one is configured" {
     try testing.expectEqual(@as(u8, 0), out.run(root, &.{"--version"}));
     try testing.expectEqualStrings("zav 1.0.0\n", out.stdout.written());
     try testing.expectEqual(@as(u8, 0), out.run(root, &.{"-V"}));
+    try testing.expectEqual(@as(u8, 2), out.run(root, &.{ "--version", "--invalid" }));
     try testing.expectEqual(@as(usize, 0), seen.runs);
+}
+
+test "run passes application state to actions and reports their diagnostics" {
+    const App = struct {
+        called: bool = false,
+
+        fn execute(ctx: *Command.ParseContext) !void {
+            const app: *@This() = @ptrCast(@alignCast(ctx.user_data.?));
+            app.called = true;
+            ctx.setDiagnostic("the action rejected this option");
+            return error.InvalidOptionValue;
+        }
+    };
+    var app: App = .{};
+    const root = try Command.init(testing.allocator, "app", "An app");
+    defer destroy(root);
+    _ = root.setAction(App.execute);
+    _ = root.enableJson();
+    var out: Outputs = .init();
+    defer out.deinit();
+    const code = @import("run.zig").run(testing.allocator, root, &.{"--json"}, .{
+        .stdout = &out.stdout.writer,
+        .stderr = &out.stderr.writer,
+        .user_data = &app,
+    });
+    try testing.expectEqual(@as(u8, 2), code);
+    try testing.expect(app.called);
+    try testing.expectEqualStrings(
+        "{\"error\":{\"kind\":\"InvalidOptionValue\",\"message\":\"the action rejected this option\"}}\n",
+        out.stderr.written(),
+    );
 }

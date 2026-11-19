@@ -28,6 +28,8 @@ allocator: std.mem.Allocator,
 report_errors: bool = true,
 /// Handed to the action as `ParseContext.out`.
 out: ?*std.Io.Writer = null,
+/// Handed to the action as `ParseContext.user_data`.
+user_data: ?*anyopaque = null,
 /// After `parse`: `--help`/`-h` was given, so no action ran.
 help_requested: bool = false,
 /// After `parse`: `--json` appeared on the command line (before any `--`).
@@ -93,6 +95,7 @@ fn parseImpl(self: *Parser, command: *Command, args: []const []const u8, mode: M
     var context = Command.ParseContext.init(self.allocator, command.name);
     defer context.deinit();
     context.out = self.out;
+    context.user_data = self.user_data;
 
     try self.push(command);
     var current = command;
@@ -201,7 +204,13 @@ fn parseImpl(self: *Parser, command: *Command, args: []const []const u8, mode: M
         return self.fail(ParseError.TooManyArguments, "Too many arguments provided", .{});
     }
 
-    if (current.hasAction()) return current.runAction(&context);
+    if (current.hasAction()) return current.runAction(&context) catch |err| {
+        const message = context.diagnostic();
+        @memcpy(self.diagnostic_buffer[0..message.len], message);
+        self.diagnostic_len = message.len;
+        if (self.report_errors and message.len != 0) std.debug.print("Error: {s}\n", .{message});
+        return err;
+    };
     if (current.subcommands.items.len > 0) {
         if (mode == .legacy) return error.MissingCommand; // silently nothing, as before
         return self.fail(ParseError.MissingCommand, "'{s}' needs a command", .{current.name});

@@ -26,6 +26,10 @@ pub const ParseContext = struct {
     /// Where `writeJson` and command output go, when the caller provides it
     /// (`cli.run` does).
     out: ?*std.Io.Writer = null,
+    /// Application state supplied to `cli.run` or the parser.
+    user_data: ?*anyopaque = null,
+    diagnostic_buffer: [256]u8 = undefined,
+    diagnostic_len: usize = 0,
 
     pub fn init(allocator: std.mem.Allocator, command_name: []const u8) ParseContext {
         return .{
@@ -80,6 +84,17 @@ pub const ParseContext = struct {
     /// Whether the caller asked for machine-readable output.
     pub fn wantsJson(self: *const ParseContext) bool {
         return self.json;
+    }
+
+    /// Describe an action error for the caller's normal error reporting.
+    /// Set this before returning the error.
+    pub fn setDiagnostic(self: *ParseContext, message: []const u8) void {
+        self.diagnostic_len = @min(self.diagnostic_buffer.len, message.len);
+        @memcpy(self.diagnostic_buffer[0..self.diagnostic_len], message[0..self.diagnostic_len]);
+    }
+
+    pub fn diagnostic(self: *const ParseContext) []const u8 {
+        return self.diagnostic_buffer[0..self.diagnostic_len];
     }
 
     /// Write `value` as one line of JSON to `out`.

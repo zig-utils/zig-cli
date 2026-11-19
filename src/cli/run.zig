@@ -12,6 +12,10 @@ pub const RunOptions = struct {
     stderr: *std.Io.Writer,
     /// Shown in help headers, and printed for `--version` / `-V` when set.
     version: []const u8 = "",
+    /// Additional lines printed by the version flags. Include a final newline.
+    version_details: []const u8 = "",
+    /// Application state passed to command actions.
+    user_data: ?*anyopaque = null,
 };
 
 /// Exit code for a command line that does not parse (unknown option or
@@ -26,8 +30,8 @@ pub const exit_failure: u8 = 1;
 ///
 /// - the action's own code (an action returning `!void` gives 0),
 /// - 0 after printing help for `--help` / `-h`,
-/// - 0 after printing `<name> <version>` for `--version` / `-V` as the first
-///   argument, when `options.version` is set,
+/// - 0 after printing `<name> <version>` and optional details for a lone
+///   `--version` / `-V`, when `options.version` is set,
 /// - `exit_usage` (2) when the command line does not parse, or names a command
 ///   group without one of its commands (its help goes to stderr),
 /// - `exit_failure` (1) when the action returns an error.
@@ -39,16 +43,18 @@ pub fn run(allocator: std.mem.Allocator, root: *Command, args: []const []const u
     defer options.stdout.flush() catch {};
     defer options.stderr.flush() catch {};
 
-    if (options.version.len > 0 and args.len > 0 and
+    if (options.version.len > 0 and args.len == 1 and
         (std.mem.eql(u8, args[0], "--version") or std.mem.eql(u8, args[0], "-V")))
     {
         options.stdout.print("{s} {s}\n", .{ root.name, options.version }) catch {};
+        options.stdout.writeAll(options.version_details) catch {};
         return 0;
     }
 
     var parser = Parser.init(allocator);
     parser.report_errors = false;
     parser.out = options.stdout;
+    parser.user_data = options.user_data;
 
     const code = parser.parseForExit(root, args) catch |err| {
         const usage = isParseError(err);
