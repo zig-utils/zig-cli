@@ -482,6 +482,12 @@ Supported types:
 - Nested structs: Arbitrary depth
 - Arrays: Fixed-size arrays
 
+The native TOML reader rejects duplicate keys, repeated table headers, and
+scalar/table conflicts. Arrays require commas and a closing bracket, support
+comments and trailing commas, and are limited to 64 nested arrays. The advanced
+`config.TomlParser` API borrows keys and strings from its source; retain that
+source until the parsed values are no longer needed.
+
 ### Prompts
 
 #### Text Prompt
