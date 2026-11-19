@@ -22,6 +22,7 @@ pub const Value = union(enum) {
 
     pub fn deinit(self: *Value, allocator: std.mem.Allocator) void {
         switch (self.*) {
+            .string => |str| allocator.free(str),
             .array => |arr| {
                 for (arr) |*item| {
                     item.deinit(allocator);
@@ -31,8 +32,8 @@ pub const Value = union(enum) {
             .object => |*obj| {
                 var iter = obj.iterator();
                 while (iter.next()) |entry| {
-                    var val = entry.value_ptr.*;
-                    val.deinit(allocator);
+                    allocator.free(entry.key_ptr.*);
+                    entry.value_ptr.deinit(allocator);
                 }
                 obj.deinit();
             },
@@ -64,7 +65,11 @@ pub fn init(allocator: std.mem.Allocator, source: []const u8) Json5Parser {
 
 pub fn parse(self: *Json5Parser) !Value {
     self.skipWhitespaceAndComments();
-    return try self.parseValue();
+    var value = try self.parseValue();
+    errdefer value.deinit(self.allocator);
+    self.skipWhitespaceAndComments();
+    if (self.pos != self.source.len) return ParseError.InvalidSyntax;
+    return value;
 }
 
 fn parseValue(self: *Json5Parser) ParseError!Value {
@@ -95,8 +100,8 @@ fn parseObject(self: *Json5Parser) !Value {
     errdefer {
         var iter = obj.iterator();
         while (iter.next()) |entry| {
-            var val = entry.value_ptr.*;
-            val.deinit(self.allocator);
+            self.allocator.free(entry.key_ptr.*);
+            entry.value_ptr.deinit(self.allocator);
         }
         obj.deinit();
     }
@@ -111,20 +116,30 @@ fn parseObject(self: *Json5Parser) !Value {
     while (self.pos < self.source.len) {
         self.skipWhitespaceAndComments();
 
-        // Parse key (can be quoted or unquoted in JSON5)
-        const key = try self.parseKey();
+        {
+            // Parse key (can be quoted or unquoted in JSON5)
+            const key = try self.parseKey();
+            errdefer self.allocator.free(key);
 
-        self.skipWhitespaceAndComments();
+            self.skipWhitespaceAndComments();
 
-        // Expect ':'
-        if (self.pos >= self.source.len or self.source[self.pos] != ':') {
-            return ParseError.InvalidSyntax;
+            // Expect ':'
+            if (self.pos >= self.source.len or self.source[self.pos] != ':') {
+                return ParseError.InvalidSyntax;
+            }
+            self.pos += 1;
+
+            // Parse value
+            var value = try self.parseValue();
+            errdefer value.deinit(self.allocator);
+            if (obj.getPtr(key)) |existing| {
+                existing.deinit(self.allocator);
+                existing.* = value;
+                self.allocator.free(key);
+            } else {
+                try obj.put(key, value);
+            }
         }
-        self.pos += 1;
-
-        // Parse value
-        const value = try self.parseValue();
-        try obj.put(key, value);
 
         self.skipWhitespaceAndComments();
 
@@ -134,7 +149,7 @@ fn parseObject(self: *Json5Parser) !Value {
 
         if (self.source[self.pos] == '}') {
             self.pos += 1;
-            break;
+            return Value{ .object = obj };
         }
 
         if (self.source[self.pos] == ',') {
@@ -143,7 +158,7 @@ fn parseObject(self: *Json5Parser) !Value {
             // Allow trailing comma
             if (self.pos < self.source.len and self.source[self.pos] == '}') {
                 self.pos += 1;
-                break;
+                return Value{ .object = obj };
             }
             continue;
         }
@@ -151,7 +166,7 @@ fn parseObject(self: *Json5Parser) !Value {
         return ParseError.InvalidSyntax;
     }
 
-    return Value{ .object = obj };
+    return ParseError.UnexpectedEndOfFile;
 }
 
 fn parseKey(self: *Json5Parser) ![]const u8 {
@@ -180,7 +195,7 @@ fn parseKey(self: *Json5Parser) ![]const u8 {
         return ParseError.InvalidSyntax;
     }
 
-    return self.source[start..self.pos];
+    return try self.allocator.dupe(u8, self.source[start..self.pos]);
 }
 
 fn parseArray(self: *Json5Parser) !Value {
@@ -201,8 +216,11 @@ fn parseArray(self: *Json5Parser) !Value {
     }
 
     while (self.pos < self.source.len) {
-        const value = try self.parseValue();
-        try items.append(self.allocator, value);
+        {
+            var value = try self.parseValue();
+            errdefer value.deinit(self.allocator);
+            try items.append(self.allocator, value);
+        }
 
         self.skipWhitespaceAndComments();
 
@@ -212,7 +230,7 @@ fn parseArray(self: *Json5Parser) !Value {
 
         if (self.source[self.pos] == ']') {
             self.pos += 1;
-            break;
+            return Value{ .array = try items.toOwnedSlice(self.allocator) };
         }
 
         if (self.source[self.pos] == ',') {
@@ -221,7 +239,7 @@ fn parseArray(self: *Json5Parser) !Value {
             // Allow trailing comma
             if (self.pos < self.source.len and self.source[self.pos] == ']') {
                 self.pos += 1;
-                break;
+                return Value{ .array = try items.toOwnedSlice(self.allocator) };
             }
             continue;
         }
@@ -229,7 +247,7 @@ fn parseArray(self: *Json5Parser) !Value {
         return ParseError.InvalidSyntax;
     }
 
-    return Value{ .array = try items.toOwnedSlice(self.allocator) };
+    return ParseError.UnexpectedEndOfFile;
 }
 
 fn parseString(self: *Json5Parser) !Value {

@@ -1,6 +1,6 @@
 # zig-cli
 
-A **type-safe, compile-time validated** CLI library for Zig 0.16+. Define your CLI with structs, get full type safety and zero runtime overhead.
+A **type-safe, compile-time validated** CLI library for Zig 0.17.0-dev.1857 or newer. Define your CLI with structs, get full type safety and zero runtime overhead.
 
 **No string-based lookups. No runtime parsing. Just pure, type-safe Zig.**
 
@@ -487,6 +487,12 @@ scalar/table conflicts. Arrays require commas and a closing bracket, support
 comments and trailing commas, and are limited to 64 nested arrays. The advanced
 `config.TomlParser` API borrows keys and strings from its source; retain that
 source until the parsed values are no longer needed.
+
+The config loader owns its keys, strings and collections until `deinit`, so a
+loaded config does not borrow its input string or file buffer. Typed nested
+structs and dotted getters such as `getString("database.host")` traverse tables.
+The advanced JSONC and JSON5 parsers also return owned values; release them with
+`Value.deinit(allocator)`.
 
 ### Prompts
 

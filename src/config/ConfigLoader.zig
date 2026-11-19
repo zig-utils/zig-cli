@@ -40,7 +40,7 @@ pub fn TypedConfig(comptime T: type) type {
 
             try raw_config.loadFromFile(path, format);
 
-            const value = try parseStruct(T, allocator, &raw_config, "");
+            const value = try parseStruct(T, &raw_config.data);
 
             return .{
                 .value = value,
@@ -56,7 +56,7 @@ pub fn TypedConfig(comptime T: type) type {
 
             try raw_config.loadFromString(content, format);
 
-            const value = try parseStruct(T, allocator, &raw_config, "");
+            const value = try parseStruct(T, &raw_config.data);
 
             return .{
                 .value = value,
@@ -70,7 +70,7 @@ pub fn TypedConfig(comptime T: type) type {
             var raw_config = try Config.discover(allocator, app_name);
             errdefer raw_config.deinit();
 
-            const value = try parseStruct(T, allocator, &raw_config, "");
+            const value = try parseStruct(T, &raw_config.data);
 
             return .{
                 .value = value,
@@ -84,7 +84,7 @@ pub fn TypedConfig(comptime T: type) type {
         }
 
         /// Parse a struct type from config
-        fn parseStruct(comptime StructType: type, allocator: std.mem.Allocator, config: *Config, prefix: []const u8) !StructType {
+        fn parseStruct(comptime StructType: type, table: *const std.StringHashMap(Config.Value)) !StructType {
             const struct_info = @typeInfo(StructType);
             if (struct_info != .@"struct") {
                 @compileError("parseStruct requires a struct type");
@@ -94,13 +94,7 @@ pub fn TypedConfig(comptime T: type) type {
             const fields = struct_info.@"struct";
 
             inline for (fields.field_names, fields.field_types, fields.field_attrs) |field_name, field_type, field_attrs| {
-                const full_key = if (prefix.len > 0)
-                    try std.fmt.allocPrint(allocator, "{s}.{s}", .{ prefix, field_name })
-                else
-                    field_name;
-                defer if (prefix.len > 0) allocator.free(full_key);
-
-                const field_value = try parseField(field_type, allocator, config, full_key, field_attrs.default_value_ptr);
+                const field_value = try parseField(field_type, table.get(field_name), field_attrs.default_value_ptr);
                 @field(result, field_name) = field_value;
             }
 
@@ -110,9 +104,7 @@ pub fn TypedConfig(comptime T: type) type {
         /// Parse a single field value
         fn parseField(
             comptime FieldType: type,
-            allocator: std.mem.Allocator,
-            config: *Config,
-            key: []const u8,
+            config_value: ?Config.Value,
             default_value: ?*const anyopaque,
         ) !FieldType {
             const field_type_info = @typeInfo(FieldType);
@@ -120,9 +112,6 @@ pub fn TypedConfig(comptime T: type) type {
             // Handle optional types
             const is_optional = field_type_info == .optional;
             const base_type = if (is_optional) field_type_info.optional.child else FieldType;
-
-            // Try to get value from config
-            const config_value = config.get(key);
 
             // If no value found
             if (config_value == null) {
@@ -135,12 +124,10 @@ pub fn TypedConfig(comptime T: type) type {
                     return null;
                 }
                 // Error for required field
-                std.debug.print("Missing required config key: {s}\n", .{key});
                 return error.MissingRequiredField;
             }
 
-            const value = config_value.?.*;
-            const parsed = try parseValue(base_type, allocator, config, key, value);
+            const parsed = try parseValue(base_type, config_value.?);
 
             if (is_optional) {
                 return parsed;
@@ -151,9 +138,6 @@ pub fn TypedConfig(comptime T: type) type {
         /// Parse a value based on its type
         fn parseValue(
             comptime ValueType: type,
-            allocator: std.mem.Allocator,
-            config: *Config,
-            key: []const u8,
             value: Config.Value,
         ) !ValueType {
             const value_type_info = @typeInfo(ValueType);
@@ -186,7 +170,10 @@ pub fn TypedConfig(comptime T: type) type {
                     }
                     @compileError("Unsupported pointer type");
                 },
-                .@"struct" => try parseStruct(ValueType, allocator, config, key),
+                .@"struct" => switch (value) {
+                    .table => |table| try parseStruct(ValueType, &table),
+                    else => error.TypeMismatch,
+                },
                 .array => |arr| blk: {
                     switch (value) {
                         .array => |items| {
@@ -195,7 +182,7 @@ pub fn TypedConfig(comptime T: type) type {
                             }
                             var result: ValueType = undefined;
                             for (items, 0..) |item, i| {
-                                result[i] = try parseValue(arr.child, allocator, config, key, item);
+                                result[i] = try parseValue(arr.child, item);
                             }
                             break :blk result;
                         },
@@ -285,11 +272,10 @@ test "TypedConfig: nested structs" {
     };
 
     const toml_content =
+        \\debug = true
         \\[database]
         \\host = "localhost"
         \\port = 5432
-        \\
-        \\debug = true
     ;
 
     var config = try TypedConfig(AppConfig).loadFromString(allocator, toml_content, .toml);
@@ -529,4 +515,120 @@ test "TypedConfig: invalid enum value returns error" {
 
     const result = TypedConfig(TestConfig).loadFromString(allocator, toml_content, .toml);
     try testing.expectError(error.InvalidEnumValue, result);
+}
+
+test "TypedConfig: nested JSON objects and arrays use their own values" {
+    const Schema = struct {
+        database: struct { host: []const u8, port: u16 },
+        replicas: [2]struct { name: []const u8 },
+    };
+    inline for (.{ Config.ConfigFormat.jsonc, Config.ConfigFormat.json5 }) |format| {
+        var config = try TypedConfig(Schema).loadFromString(std.testing.allocator,
+            \\{"database":{"host":"local","port":5432},"replicas":[{"name":"one"},{"name":"two"}]}
+        , format);
+        defer config.deinit();
+        try std.testing.expectEqualStrings("local", config.value.database.host);
+        try std.testing.expectEqual(@as(u16, 5432), config.value.database.port);
+        try std.testing.expectEqualStrings("one", config.value.replicas[0].name);
+        try std.testing.expectEqualStrings("two", config.value.replicas[1].name);
+    }
+}
+
+test "TypedConfig: rejects scalar values for nested structs" {
+    const Schema = struct { database: struct { port: u16 = 5432 } };
+    try std.testing.expectError(error.TypeMismatch, TypedConfig(Schema).loadFromString(
+        std.testing.allocator,
+        "database = 1",
+        .toml,
+    ));
+}
+
+test "TypedConfig: cleans up every failed allocation" {
+    inline for (.{ Config.ConfigFormat.toml, Config.ConfigFormat.jsonc, Config.ConfigFormat.json5 }) |format| {
+        try std.testing.checkAllAllocationFailures(std.testing.allocator, loadWithAllocationFailures, .{format});
+    }
+}
+
+fn loadWithAllocationFailures(backing: std.mem.Allocator, format: Config.ConfigFormat) !void {
+    // Keep array and string allocations deterministic when testing each failure point.
+    var no_resize = std.testing.FailingAllocator.init(backing, .{ .resize_fail_index = 0 });
+    const allocator = no_resize.allocator();
+    const Schema = struct {
+        database: struct { host: []const u8, names: [2][]const u8 },
+    };
+    const content = switch (format) {
+        .toml => "[database]\nhost = 'local'\nnames = ['one', 'two']",
+        .jsonc => "{\"database\":{\"host\":\"local\",\"names\":[\"one\",\"two\"]}}",
+        .json5 => "{database:{host:'local',names:['one','two']}}",
+        .auto => unreachable,
+    };
+    var config = try TypedConfig(Schema).loadFromString(allocator, content, format);
+    defer config.deinit();
+    try std.testing.expectEqualStrings("local", config.value.database.host);
+    try std.testing.expectEqualStrings("two", config.value.database.names[1]);
+}
+
+test "TypedConfig: JSON parse and type errors release nested strings" {
+    const Schema = struct { port: u16 };
+    inline for (.{ Config.ConfigFormat.jsonc, Config.ConfigFormat.json5 }) |format| {
+        const invalid_inputs = [_][]const u8{
+            "{\"key\"}",
+            "{\"key\":\"value\",\"bad\": [\"nested\",}",
+            "{\"key\":{\"nested\":\"value\"}} trailing",
+            "{",
+            "[",
+        };
+        for (invalid_inputs) |content| {
+            try std.testing.checkAllAllocationFailures(std.testing.allocator, loadInvalidJson, .{ content, format });
+        }
+        try std.testing.expectError(error.TypeMismatch, TypedConfig(Schema).loadFromString(
+            std.testing.allocator,
+            "{\"port\":\"text\",\"ignored\":[{\"name\":\"nested\"}]}",
+            format,
+        ));
+        var config = try TypedConfig(Schema).loadFromString(
+            std.testing.allocator,
+            "{\"port\":\"old\",\"port\":8080}",
+            format,
+        );
+        defer config.deinit();
+        try std.testing.expectEqual(@as(u16, 8080), config.value.port);
+    }
+}
+
+fn loadInvalidJson(allocator: std.mem.Allocator, content: []const u8, format: Config.ConfigFormat) !void {
+    var config = TypedConfig(struct {}).loadFromString(allocator, content, format) catch |err| {
+        if (err == error.OutOfMemory) return err;
+        return;
+    };
+    defer config.deinit();
+    return error.ExpectedParseFailure;
+}
+
+test "TypedConfig: discovery cleans up every failed allocation" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, discoverWithAllocationFailures, .{});
+}
+
+fn discoverWithAllocationFailures(allocator: std.mem.Allocator) !void {
+    var config = try TypedConfig(struct { enabled: bool = true }).discover(allocator, "__zig_cli_missing_config_allocation_test__");
+    defer config.deinit();
+    try std.testing.expect(config.value.enabled);
+}
+
+test "TypedConfig: file loads keep strings after the read buffer is freed" {
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    inline for (.{ "toml", "jsonc", "json5" }) |extension| {
+        const content = if (comptime std.mem.eql(u8, extension, "toml"))
+            "[database]\nhost = 'local'"
+        else
+            "{\"database\":{\"host\":\"local\"}}";
+        const name = "config." ++ extension;
+        try tmp.dir.writeFile(std.testing.io, .{ .sub_path = name, .data = content });
+        const path = try tmp.dir.realPathFileAlloc(std.testing.io, name, std.testing.allocator);
+        defer std.testing.allocator.free(path);
+        var config = try TypedConfig(struct { database: struct { host: []const u8 } }).load(std.testing.allocator, path);
+        defer config.deinit();
+        try std.testing.expectEqualStrings("local", config.value.database.host);
+    }
 }

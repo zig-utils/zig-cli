@@ -1,7 +1,7 @@
 .{
     .name = .zig_cli,
     .version = "0.1.6",
-    .minimum_zig_version = "0.17.0-dev",
+    .minimum_zig_version = "0.17.0-dev.1857",
     .paths = .{
         "build.zig",
         "build.zig.zon",

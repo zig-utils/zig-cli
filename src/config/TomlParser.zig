@@ -363,7 +363,10 @@ test "arrays allow nested values comments and trailing commas" {
     try std.testing.expectEqual(@as(usize, 0), root.table.get("metadata").?.table.get("items").?.array.len);
 }
 
-fn parseWithAllocationFailures(allocator: std.mem.Allocator) !void {
+fn parseWithAllocationFailures(backing: std.mem.Allocator) !void {
+    // Force remap to take the allocation path on every run, independent of the heap layout.
+    var no_resize = std.testing.FailingAllocator.init(backing, .{ .resize_fail_index = 0 });
+    const allocator = no_resize.allocator();
     var parser = TomlParser.init(allocator,
         \\items = [["one", "two"], [1, 2]]
         \\[metadata]

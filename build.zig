@@ -27,6 +27,19 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&run_lib_tests.step);
 
+    // Generic config APIs are lazy: importing the root module alone does not
+    // discover ConfigLoader's tests or instantiate its typed loading paths.
+    const config_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/config/ConfigLoader.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    const run_config_tests = b.addRunArtifact(config_tests);
+    test_step.dependOn(&run_config_tests.step);
+
     // ── Examples ────────────────────────────────────────────────────────
     const example_names = [_][]const u8{
         "simple",
