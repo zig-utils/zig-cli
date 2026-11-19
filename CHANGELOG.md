@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.7 - 2026-11-18
+
+- fix(config): own loaded keys and values (246ef59)
+
 ## v0.1.6 - 2026-11-18
 
 - fix(config): reject malformed TOML without panics or leaks (61263df)
