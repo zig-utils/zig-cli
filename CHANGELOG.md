@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.8 - 2026-11-23
+
+- feat(parser): bool options take yes/no, on/off and 1/0 as well as true/false (e54381a)
+- feat: pass application state and diagnostics through command dispatch (9da0217)
+
 ## v0.1.7 - 2026-11-18
 
 - fix(config): own loaded keys and values (246ef59)
