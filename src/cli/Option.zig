@@ -19,6 +19,19 @@ default_value: ?[]const u8 = null,
 /// May be given more than once; every value is kept (`ParseContext.getOptionValues`).
 repeatable: bool = false,
 
+/// The spellings a bool option takes after `=`, case-insensitively: true, false, yes, no, on,
+/// off, 1, 0 (clamscan-style `--flag=yes` as well as `--flag=true`). A bare `--flag` is true.
+pub const bool_spellings = "true, false, yes, no, on, off, 1 or 0";
+
+/// `text` as a bool option value, or null when it is none of `bool_spellings`.
+pub fn parseBool(text: []const u8) ?bool {
+    const yes = [_][]const u8{ "true", "yes", "on", "1" };
+    const no = [_][]const u8{ "false", "no", "off", "0" };
+    for (yes) |s| if (std.ascii.eqlIgnoreCase(text, s)) return true;
+    for (no) |s| if (std.ascii.eqlIgnoreCase(text, s)) return false;
+    return null;
+}
+
 pub fn init(name: []const u8, long: []const u8, description: []const u8, option_type: OptionType) Option {
     return .{
         .name = name,

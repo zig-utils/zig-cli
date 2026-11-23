@@ -122,11 +122,10 @@ fn parseImpl(self: *Parser, command: *Command, args: []const []const u8, mode: M
 
             if (self.findOption(flag)) |opt| {
                 if (opt.option_type == .bool) {
-                    const value = inline_value orelse "true";
-                    if (!std.mem.eql(u8, value, "true") and !std.mem.eql(u8, value, "false")) {
-                        return self.fail(ParseError.InvalidOptionValue, "Option '--{s}' expects true or false", .{opt.long});
-                    }
-                    try context.options.put(opt.name, value);
+                    // Stored as "true" or "false" whatever the spelling, so actions compare one.
+                    const on = Option.parseBool(inline_value orelse "true") orelse
+                        return self.fail(ParseError.InvalidOptionValue, "Option '--{s}' expects {s}, got '{s}'", .{ opt.long, Option.bool_spellings, inline_value.? });
+                    try context.options.put(opt.name, if (on) "true" else "false");
                 } else {
                     const value = inline_value orelse blk: {
                         i += 1;

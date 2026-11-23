@@ -352,3 +352,39 @@ test "run passes application state to actions and reports their diagnostics" {
         out.stderr.written(),
     );
 }
+
+test "a bool option takes --flag and every true/false spelling, case-insensitively" {
+    const root = try zav(testing.allocator);
+    defer destroy(root);
+    var out: Outputs = .init();
+    defer out.deinit();
+
+    for ([_][]const u8{ "--verbose", "--verbose=true", "--verbose=yes", "--verbose=on", "--verbose=1", "--verbose=YES", "--verbose=True", "--verbose=ON" }) |arg| {
+        try testing.expectEqual(@as(u8, 0), out.run(root, &.{ arg, "db", "build" }));
+        try testing.expect(seen.verbose);
+    }
+    for ([_][]const u8{ "--verbose=false", "--verbose=no", "--verbose=off", "--verbose=0", "--verbose=No", "--verbose=OFF" }) |arg| {
+        try testing.expectEqual(@as(u8, 0), out.run(root, &.{ arg, "db", "build" }));
+        try testing.expect(!seen.verbose);
+    }
+}
+
+test "a bool option rejects other values and names the accepted spellings" {
+    const root = try zav(testing.allocator);
+    defer destroy(root);
+    var out: Outputs = .init();
+    defer out.deinit();
+
+    for ([_][]const u8{ "--verbose=maybe", "--verbose=", "--verbose=2", "--verbose=yess" }) |arg| {
+        try testing.expectEqual(@as(u8, 2), out.run(root, &.{ arg, "db", "build" }));
+        const err = out.stderr.written();
+        try testing.expect(std.mem.indexOf(u8, err, "Option '--verbose' expects true, false, yes, no, on, off, 1 or 0") != null);
+        try testing.expectEqual(@as(usize, 0), seen.runs);
+    }
+}
+
+test "Option.parseBool" {
+    try testing.expectEqual(@as(?bool, true), Option.parseBool("Yes"));
+    try testing.expectEqual(@as(?bool, false), Option.parseBool("0"));
+    try testing.expectEqual(@as(?bool, null), Option.parseBool("y"));
+}
